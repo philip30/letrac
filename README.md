@@ -8,6 +8,8 @@ http://www.cs.utexas.edu/~ml/papers/wasp-logic-acl-07.pdf
 
 Installation
 =====
+This software was built upon Python 2.7.3. Using the same version of python (or higher) is recommended for best compatibility.
+
 This software uses additional alignment software https://github.com/neubig/pialign to do word alignment. 
 You need to install it first so it can be referenced from letrac.
 
