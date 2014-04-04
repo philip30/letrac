@@ -55,11 +55,15 @@ def main():
 		lex_rule, _, finish = lex_acq([], query_node, sent, set([]))
 
 		#### Printing all results
-		#print sent_line
-		#print_node(query_node,stream=sys.stdout)
+		if args.verbose:
+			print sent_line
+			print_node(query_node,stream=sys.stdout)
 		for r in lex_rule:
-			print trav_lambda_rule_to_string(r)
-		#print '-------------------------------------'
+			if args.translation_rule:
+				print trans_lambda_rule_to_string(r)
+			else:
+				print lambda_rule_to_string(r)
+		if args.verbose: print '-------------------------------------'
 
 	# Closing all files
 	map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
@@ -169,7 +173,7 @@ def arg_to_string(index_map,position,arg):
 	return ret
 
 
-def trav_lambda_rule_to_string(r):
+def trans_lambda_rule_to_string(r):
 	ret = ""
 	index_map = {}
 	for w in r[1]:
@@ -294,6 +298,8 @@ def parse_argument():
 	parser.add_argument('--sent',type=str,required=True,help="The sentence file")
 	parser.add_argument('--fol',type=str,required=True,help="The sentence file in fol")
 	parser.add_argument('--align',type=str,required=True,help="The alignment between sent to fol")
+	parser.add_argument('--translation_rule',action="store_true",help="Output the rule into translation rule instead.")
+	parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
 	return parser.parse_args()
 
 if __name__ == "__main__":

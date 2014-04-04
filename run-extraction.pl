@@ -8,7 +8,7 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $LETRAC_DIR, $FORCE);
+my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE);
 
 GetOptions(
     # Necessary
@@ -16,6 +16,8 @@ GetOptions(
     "pialign-dir=s" => \$PIALIGN_DIR,
     "working-dir=s" => \$WORKING_DIR,
     "input-file=s" => \$INPUT,
+    "translation-rule!" => \$TRANSLATION_RULE,
+    "verbose!" => \$VERBOSE,
     "force!" => \$FORCE
 );
 
@@ -59,7 +61,10 @@ safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $W
 safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal --input $INPUT --out $WORKING_DIR/out/$file_name.ism");
 
 # lexical-acquisition
-safesystem("$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/out/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal > $WORKING_DIR/out/lexical-grammar.txt");
+my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/out/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal > $WORKING_DIR/out/lexical-grammar.txt";
+$lex_command .= " --verbose" if $VERBOSE;
+$lex_command .= " --translation_rule" if $TRANSLATION_RULE;
+safesystem($lex_command);
 
 # Auxiliary functions
 sub safesystem {
