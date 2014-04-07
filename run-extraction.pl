@@ -8,7 +8,7 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE);
+my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE, $LAST_STEP, $GZIP);
 
 GetOptions(
     # Necessary
@@ -17,7 +17,9 @@ GetOptions(
     "working-dir=s" => \$WORKING_DIR,
     "input-file=s" => \$INPUT,
     "translation-rule!" => \$TRANSLATION_RULE,
+    "last-step=s" => \$LAST_STEP,
     "verbose!" => \$VERBOSE,
+    "gzip!" => \$GZIP,
     "force!" => \$FORCE
 );
 
@@ -35,7 +37,6 @@ if(@ARGV != 0) {
 my $file_name = substr($INPUT, rindex($INPUT, '/')+1);
 
 # CREATING DIR
-
 if (not (mkdir $WORKING_DIR) and $FORCE) {
     safesystem("rm -rf $WORKING_DIR");
     safesystem("mkdir $WORKING_DIR");
@@ -43,27 +44,33 @@ if (not (mkdir $WORKING_DIR) and $FORCE) {
     die "couldn't mkdir $WORKING_DIR";
 }
 safesystem("mkdir $WORKING_DIR/data");
-safesystem("mkdir $WORKING_DIR/align");
-safesystem("mkdir $WORKING_DIR/out");
+safesystem("mkdir $WORKING_DIR/model");
 
 # Creating input for alignment
+safesystem("mkdir $WORKING_DIR/align");
 safesystem("$LETRAC_DIR/script/align-gen.py --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $INPUT") or die "Failed on creating input for alignment";
+exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
 safesystem("$PIALIGN_DIR/src/bin/pialign $WORKING_DIR/data/$file_name.sent.gin $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/align/align-out. 2> $WORKING_DIR/align/pialign-log.txt") or die "Failed on running alignment";
 safesystem("$PIALIGN_DIR/script/itgstats.pl balign < $WORKING_DIR/align/align-out.1.samp > $WORKING_DIR/align/align-out.1.bal") or die "Failed on combining alignment";
 
 # Visualizing alignment
-safesystem("$LETRAC_DIR/script/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.vis");
-safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.vis $WORKING_DIR/align/align-out.1.bal 2 1 > $WORKING_DIR/align/bal-vis.txt");
+safesystem("$LETRAC_DIR/script/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.visin");
+safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align-out.1.bal 2 1 > $WORKING_DIR/align/bal-vis.txt");
+exit(0) if $LAST_STEP eq "align"; 
 
 # Make it isomorphic
-safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal --input $INPUT --out $WORKING_DIR/out/$file_name.ism");
+safesystem("mkdir $WORKING_DIR/iso");
+safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal --input $INPUT --out $WORKING_DIR/iso/$file_name.ism");
+exit(0) if $LAST_STEP eq "isomorph"; 
 
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/out/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal > $WORKING_DIR/out/lexical-grammar.txt";
+my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --translation_rule" if $TRANSLATION_RULE;
+$lex_command .= "> $WORKING_DIR/model/lexical-grammar.txt";
+$lex_command .= " | gzip" if $GZIP;
 safesystem($lex_command);
 
 # Auxiliary functions
