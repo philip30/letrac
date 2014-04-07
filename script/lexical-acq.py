@@ -147,6 +147,9 @@ def lambda_rule_to_string(r):
 			
 	ret += ",".join(args)
 	ret += ")"
+
+	# probability 
+	ret += " ||| 1.0"
 	return ret
 
 def arg_to_string(index_map,position,arg): 
