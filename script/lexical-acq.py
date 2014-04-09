@@ -44,13 +44,14 @@ def main():
 				s2l[fol[fol_a]] = set()
 			s2l[fol[fol_a]].add(sent_a)
 
-		#### Doing some node annoation, and bound node to which word and variable it is aligned to.
+		#### Doing some node annotation, and bound node to which word and variable it is aligned to.
 		var_map = defaultdict(lambda:len(var_map)+1)
 		query_node = change_var_to_x(query_node,var_map) # alter A->x1, B->x2, and so on
 		query_node = calculate_v(query_node)			 # give information about variables that bound to node
 		query_node = calculate_e(query_node,s2l)		 # give information about which words that are aligned to node
 		query_node = change_not_and_conj(query_node)	 # change '' to CONJUNCTION and \+ to NEGATION
-		
+		query_node = transform_multi_words_entity(query_node) # change 'w1 w2' entity into w1_w2
+
 		#### Extracting! finish indicates that extraction is performed until root
 		lex_rule, _, finish = lex_acq([], query_node, sent, set([]))
 
@@ -148,8 +149,6 @@ def lambda_rule_to_string(r):
 	ret += ",".join(args)
 	ret += ")"
 
-	# probability 
-	ret += " ||| 1.0"
 	return ret
 
 def arg_to_string(index_map,position,arg): 
@@ -184,7 +183,7 @@ def trans_lambda_rule_to_string(r):
 			if w < 0:
 				key = len(index_map)+1
 				arg_type = r[2][1][-w-1][1]
-				ret += "x" + str(key) +":"+(arg_type if arg_type == CONJUNCTION or arg_type == NEGATION else FORM) 
+				ret += "x" + str(key-1) +":"+(arg_type if arg_type == CONJUNCTION or arg_type == NEGATION else FORM) 
 				index_map[-w-1] = str(key)
 			else:
 				ret += "\"(" + str(w) + ")\""
@@ -219,7 +218,7 @@ def trav_arg_to_string(index_map,position,arg):
 	elif type(arg) == str:
 		ret = arg
 	elif type(arg) == tuple:
-		ret = "x" + str(index_map[position]) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1])
+		ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1])
 		has_args = len([x for x in list(arg[0]) if type(x) == int]) != 0
 		if has_args:
 			ret += " \"("
@@ -293,6 +292,13 @@ def change_not_and_conj(node):
 		node.label = NEGATION
 	for (i, child) in enumerate(node.childs):
 		node.childs[i] = change_not_and_conj(child)
+	return node
+
+def transform_multi_words_entity(node):
+	if type(node.label) == str and len(node.label) > 0 and node.label[0] == "'" and node.label[-1] == "'":
+		node.label = "_".join(node.label[1:-1].split())
+	for (i,child) in enumerate(node.childs):
+		node.childs[i] = transform_multi_words_entity(child)
 	return node
 
 def parse_argument():

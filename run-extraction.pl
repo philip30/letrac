@@ -53,23 +53,23 @@ exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
 safesystem("$PIALIGN_DIR/src/bin/pialign $WORKING_DIR/data/$file_name.sent.gin $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/align/align-out. 2> $WORKING_DIR/align/pialign-log.txt") or die "Failed on running alignment";
-safesystem("$PIALIGN_DIR/script/itgstats.pl balign < $WORKING_DIR/align/align-out.1.samp > $WORKING_DIR/align/align-out.1.bal") or die "Failed on combining alignment";
+safesystem("$PIALIGN_DIR/script/itgstats.pl balign < $WORKING_DIR/align/align-out.1.samp > $WORKING_DIR/align/align.txt") or die "Failed on combining alignment";
 
 # Visualizing alignment
 safesystem("$LETRAC_DIR/script/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.visin");
-safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align-out.1.bal 2 1 > $WORKING_DIR/align/bal-vis.txt");
+safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align.txt 2 1 > $WORKING_DIR/align/bal-vis.txt");
 exit(0) if $LAST_STEP eq "align"; 
 
 # Make it isomorphic
 safesystem("mkdir $WORKING_DIR/iso");
-safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal --input $INPUT --out $WORKING_DIR/iso/$file_name.ism");
+safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt --input $INPUT --out $WORKING_DIR/iso/$file_name.ism");
 exit(0) if $LAST_STEP eq "isomorph"; 
 
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align-out.1.bal";
+my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --translation_rule" if $TRANSLATION_RULE;
-$lex_command .= "> $WORKING_DIR/model/lexical-grammar.txt";
+$lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
 $lex_command .= " | gzip" if $GZIP;
 safesystem($lex_command);
 
