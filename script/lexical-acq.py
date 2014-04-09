@@ -26,6 +26,10 @@ def main():
 	sent_file = open(args.sent,'r')
 	fol_file = open(args.fol,'r')
 	align_file = open(args.align,'r')
+
+	#### counter
+	count = 0
+	f = 0
 	
 	#### For input-sentence-fol-alignment
 	for (inp_line,sent_line, fol_line, align_line) in zip(inp_file,sent_file,fol_file,align_file):
@@ -54,20 +58,26 @@ def main():
 
 		#### Extracting! finish indicates that extraction is performed until root
 		lex_rule, _, finish = lex_acq([], query_node, sent, set([]))
+		if finish: f += 1
 
 		#### Printing all results
-		if args.verbose:
-			print sent_line
-			print_node(query_node,stream=sys.stdout)
-		for r in lex_rule:
-			if args.translation_rule:
-				print trans_lambda_rule_to_string(r)
-			else:
-				print lambda_rule_to_string(r)
-		if args.verbose: print '-------------------------------------'
+		if finish or args.include_fail:
+			if args.verbose:
+				print sent_line
+				print_node(query_node,stream=sys.stdout)
+			for r in lex_rule:
+				if args.translation_rule:
+					print trans_lambda_rule_to_string(r)
+				else:
+					print lambda_rule_to_string(r)
+			if args.verbose: print '-------------------------------------'
+		count += 1
 
-	# Closing all files
+	#### Closing all files
 	map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
+
+	#### Printing stats
+	print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
 
 def lex_acq(rules, node, sent, parent_v, start=True):
 	child_spans = []
@@ -309,6 +319,7 @@ def parse_argument():
 	parser.add_argument('--align',type=str,required=True,help="The alignment between sent to fol")
 	parser.add_argument('--translation_rule',action="store_true",help="Output the rule into translation rule instead.")
 	parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
+	parser.add_argument('--include_fail',action="store_true",help="Include (partially) extracted rules even it is failed to extract until root.")
 	return parser.parse_args()
 
 if __name__ == "__main__":
