@@ -8,7 +8,7 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL, $GZIP);
+my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
 
 GetOptions(
     # Necessary
@@ -19,7 +19,6 @@ GetOptions(
     "translation-rule!" => \$TRANSLATION_RULE,
     "last-step=s" => \$LAST_STEP,
     "verbose!" => \$VERBOSE,
-    "gzip!" => \$GZIP,
     "include-fail!" => \$INCLUDE_FAIL,
     "force!" => \$FORCE
 );
@@ -72,7 +71,6 @@ $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --translation_rule" if $TRANSLATION_RULE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
-$lex_command .= " | gzip" if $GZIP;
 safesystem($lex_command);
 
 # Auxiliary functions
