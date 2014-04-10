@@ -8,7 +8,7 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
+my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
 
 GetOptions(
     # Necessary
@@ -20,6 +20,7 @@ GetOptions(
     "last-step=s" => \$LAST_STEP,
     "verbose!" => \$VERBOSE,
     "include-fail!" => \$INCLUDE_FAIL,
+    "merge-unary!" => \$MERGE_UNARY,
     "force!" => \$FORCE
 );
 
@@ -53,11 +54,11 @@ exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
 safesystem("$PIALIGN_DIR/src/bin/pialign $WORKING_DIR/data/$file_name.sent.gin $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/align/align-out. 2> $WORKING_DIR/align/pialign-log.txt") or die "Failed on running alignment";
-safesystem("$PIALIGN_DIR/script/itgstats.pl balign < $WORKING_DIR/align/align-out.1.samp > $WORKING_DIR/align/align.txt") or die "Failed on combining alignment";
+safesystem("$PIALIGN_DIR/script/itgstats.pl talign < $WORKING_DIR/align/align-out.1.samp > $WORKING_DIR/align/align.txt") or die "Failed on combining alignment";
 
 # Visualizing alignment
 safesystem("$LETRAC_DIR/script/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.visin");
-safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align.txt 2 1 > $WORKING_DIR/align/bal-vis.txt");
+safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align.txt 2 1 > $WORKING_DIR/align/tal-vis.txt");
 exit(0) if $LAST_STEP eq "align"; 
 
 # Make it isomorphic
@@ -70,6 +71,7 @@ my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/iso/$f
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --translation_rule" if $TRANSLATION_RULE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
+$lex_command .= " --merge_unary" if $MERGE_UNARY;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
 safesystem($lex_command);
 

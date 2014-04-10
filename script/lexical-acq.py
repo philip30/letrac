@@ -30,7 +30,7 @@ def main():
 	#### counter
 	count = 0
 	f = 0
-	
+
 	#### For input-sentence-fol-alignment
 	for (inp_line,sent_line, fol_line, align_line) in zip(inp_file,sent_file,fol_file,align_file):
 		inp_line = inp_line.strip()
@@ -55,6 +55,10 @@ def main():
 		query_node = calculate_e(query_node,s2l)		 # give information about which words that are aligned to node
 		query_node = change_not_and_conj(query_node)	 # change '' to CONJUNCTION and \+ to NEGATION
 		query_node = transform_multi_words_entity(query_node) # change 'w1 w2' entity into w1_w2
+
+		#### Merge Unary Node (We will not have the node such FORM->FORM)
+		if args.merge_unary: 
+			query_node,_ = merge_unary(query_node)
 
 		#### Extracting! finish indicates that extraction is performed until root
 		lex_rule, _, finish = lex_acq([], query_node, sent, set([]))
@@ -91,11 +95,11 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 			child_spans.append((i,span))
 
 	if legal:
-		is_leave = len(child_spans) == 0
-		child_spans = sorted(list(child_spans)+[(-1,(x,x)) for x in w_i],key=lambda x: x[1][0])
+		is_leaf = len(child_spans) == 0
+		child_spans = sorted(list(child_spans)+[(-1,(x,x)) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
 		# analyze rule
 		rule = transform_into_rule([],node,start,recurse=False)
-		if (len(rule) > 0) and is_leave:
+		if (len(rule) > 0) and is_leaf:
 			r = ( rule[0][0], ( sent_map(w_i,sent) ), ( node.label, set([c.label for c in node.childs]) ) , [var for var in node.v if type(var) == int])
 			if len(node.v) == 0:
 				r[2][1].add(node.childs[0].label)
@@ -126,8 +130,7 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 						arguments[i] = child.label
 
 				head = node.label if node.label == CONJUNCTION or node.label == NEGATION else rule[0][0]
-
-				r = (head , word , ( node.label, arguments ) , var_bound )
+				r = (head , word , ( select_label(node.label), arguments ) , var_bound )
 				node.type = r
 				rules.append( r )	
 	return rules, (w_i_max[0],w_i_max[-1]), legal
@@ -157,8 +160,7 @@ def lambda_rule_to_string(r):
 			args.append(arg_to_string(index_map,index,arg))
 			
 	ret += ",".join(args)
-	ret += ")"
-
+	ret += ")" * (1 + len([x for x in r[2][0] if x == '(']))
 	return ret
 
 def arg_to_string(index_map,position,arg): 
@@ -183,7 +185,6 @@ def arg_to_string(index_map,position,arg):
 			ret += ",".join(inner_arg)
 			ret += ")"
 	return ret
-
 
 def trans_lambda_rule_to_string(r):
 	ret = ""
@@ -213,14 +214,16 @@ def trans_lambda_rule_to_string(r):
 				ret += "," 
 			if type(arg) == tuple:
 				ret +="\" "
-			_arg, nt_last = trav_arg_to_string(index_map,index,arg)
+			_arg, nt_last = trans_arg_to_string(index_map,index,arg,index == rindex_nempty(list(r[2][1])))
 			ret += _arg
 
-	ret += ")\"" if nt_last else " \")\""
+	if not nt_last: ret += " \""
+	ret += ")" * (1 + len([x for x in r[2][0] if x == '(']))
+	ret += "\""
 	ret +=  " @ " + r[0]
 	return ret
 
-def trav_arg_to_string(index_map,position,arg): 
+def trans_arg_to_string(index_map,position,arg,last):
 	ret = ""
 	has_args = True
 	if type(arg) == int:
@@ -229,7 +232,8 @@ def trav_arg_to_string(index_map,position,arg):
 		ret = arg
 	elif type(arg) == tuple:
 		ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1])
-		has_args = len([x for x in list(arg[0]) if type(x) == int]) != 0
+		merged = "(" not in arg[1]
+		has_args = merged and len([x for x in list(arg[0]) if type(x) == int]) != 0
 		if has_args:
 			ret += " \"("
 			inner_arg = []
@@ -242,8 +246,9 @@ def trav_arg_to_string(index_map,position,arg):
 					inner_arg.append(i_arg[1] if i_arg[1] == CONJUNCTION or i_arg[1] == NEGATION else FORM)
 			ret += ",".join(inner_arg)
 			ret += ")"
+		elif not last:
+			ret += " \""
 	return ret, has_args
-
 
 def sent_map(span,sent):
 	ret = []
@@ -311,6 +316,50 @@ def transform_multi_words_entity(node):
 		node.childs[i] = transform_multi_words_entity(child)
 	return node
 
+def rindex_nempty(l):
+	k = len(l)-1
+	while k >= 0:
+		if l[k] != []:
+			break
+		k -= 1
+	return k 
+
+def merge_unary(node):
+	# we start from the children
+	child_spans = []
+	w_i = sorted(list(node.eorigin))
+	w_i_max = sorted(list(node.e))
+	legal = True
+	for i, child in enumerate(node.childs):
+		if len(child.childs) != 0 and len(child.e) != 0:
+			_, span = merge_unary(child)
+			child_spans.append((i,span))
+
+	child_spans = sorted(list(child_spans)+[(-1,(x,x)) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
+
+	# Checking unarity
+	if len(child_spans) == 1 and child_spans[0][0] > 0:
+		unary_child = node.childs[child_spans[0][0]]
+		x_quer = [n.label for n in node.childs if type(n.label) == int]
+		node.childs = [] # clear the child ## DANGER MAY BECOME BUG
+
+		for e in unary_child.eorigin: node.eorigin.add(e)
+		for v in unary_child.vorigin: node.vorigin.add(v)
+
+		node.label += "(" + ",".join(["x" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
+			 + select_label(unary_child.label)
+		for unary_child_child in unary_child.childs:
+			node.childs.append(unary_child_child)
+
+	return node, (w_i_max[0],w_i_max[-1])
+
+def select_label(label):
+	if label == NEGATION:
+		label = "-"
+	elif label == CONJUNCTION:
+		label = ""
+	return label
+
 def parse_argument():
 	parser = argparse.ArgumentParser(description="Run Lexical Acquisition")
 	parser.add_argument('--input', type=str,required=True,help="The geoquery file")
@@ -320,6 +369,7 @@ def parse_argument():
 	parser.add_argument('--translation_rule',action="store_true",help="Output the rule into translation rule instead.")
 	parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
 	parser.add_argument('--include_fail',action="store_true",help="Include (partially) extracted rules even it is failed to extract until root.")
+	parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
 	return parser.parse_args()
 
 if __name__ == "__main__":
