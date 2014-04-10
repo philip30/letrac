@@ -61,7 +61,7 @@ def main():
 			query_node,_ = merge_unary(query_node)
 
 		#### Extracting! finish indicates that extraction is performed until root
-		lex_rule, _, finish = lex_acq([], query_node, sent, set([]))
+		lex_rule, _, finish, _ = lex_acq([], query_node, sent, set([]))
 		if finish: f += 1
 
 		#### Printing all results
@@ -88,19 +88,21 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 	w_i = sorted(list(node.eorigin))
 	w_i_max = sorted(list(node.e))
 	legal = True
+	var_bound = [];
 	for i, child in enumerate(node.childs):
 		if len(child.childs) != 0 and len(child.e) != 0:
-			_, span, _legal = lex_acq(rules, child, sent, set(list(node.vorigin)+list(parent_v)), start=False)
+			_, span, _legal, var_bound = lex_acq(rules, child, sent, set(list(node.vorigin)+list(parent_v)), start=False)
 			legal = legal and _legal
-			child_spans.append((i,span))
+			child_spans.append((i,span,var_bound))
 
 	if legal:
 		is_leaf = len(child_spans) == 0
-		child_spans = sorted(list(child_spans)+[(-1,(x,x)) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
+		child_spans = sorted(list(child_spans)+[(-1,(x,x),[]) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
 		# analyze rule
 		rule = transform_into_rule([],node,start,recurse=False)
 		if (len(rule) > 0) and is_leaf:
-			r = ( rule[0][0], ( sent_map(w_i,sent) ), ( node.label, set([c.label for c in node.childs]) ) , [var for var in node.v if type(var) == int])
+			var_bound = [var for var in node.vorigin if type(var) == int]
+			r = ( rule[0][0], ( sent_map(w_i,sent) ), ( node.label, set([c.label for c in node.childs]) ) , var_bound, [[]] * len(node.childs))
 			if len(node.v) == 0:
 				r[2][1].add(node.childs[0].label)
 			rules.append( r )
@@ -109,10 +111,11 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 			previous = -1
 			word = []
 			var_bound = [] if start else [x for x in node.v if x in parent_v]
-
+			arg_bound = [[]] * len(node.childs)
 			arguments = [[]] * len(node.childs)
-			for index, child_span in child_spans:
+			for index, child_span, child_bound in child_spans:
 				if child_span[0] < previous:
+					var_bound = []
 					legal = False
 					break
 				elif previous != -1:
@@ -123,6 +126,7 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 					word.append(sent[child_span[0]])
 				else:
 					word.append(-index-1)
+					arg_bound[index]=child_bound
 					arguments[index]=(node.childs[index].type[2][1],node.childs[index].label)
 			else:
 				for i, child in enumerate(node.childs):
@@ -130,10 +134,10 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 						arguments[i] = child.label
 
 				head = node.label if node.label == CONJUNCTION or node.label == NEGATION else rule[0][0]
-				r = (head , word , ( select_label(node.label), arguments ) , var_bound )
+				r = (head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound)
 				node.type = r
 				rules.append( r )	
-	return rules, (w_i_max[0],w_i_max[-1]), legal
+	return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound
 
 def lambda_rule_to_string(r):
 	ret = r[0] + " ||| "
@@ -157,13 +161,13 @@ def lambda_rule_to_string(r):
 	args = []
 	for index, arg in enumerate(r[2][1]):
 		if arg != []:
-			args.append(arg_to_string(index_map,index,arg))
+			args.append(arg_to_string(index_map,index,arg,r[4][index]))
 			
 	ret += ",".join(args)
 	ret += ")" * (1 + len([x for x in r[2][0] if x == '(']))
 	return ret
 
-def arg_to_string(index_map,position,arg): 
+def arg_to_string(index_map,position,arg,bound): 
 	ret = ""
 	if type(arg) == int:
 		ret = "x" + str(arg)
@@ -171,17 +175,12 @@ def arg_to_string(index_map,position,arg):
 		ret = arg
 	elif type(arg) == tuple:
 		ret = (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) + index_map[position] 
-		has_args = len([x for x in list(arg[0]) if type(x) == int]) != 0
+		has_args = len(bound) != 0
 		if has_args:
 			ret += "("
 			inner_arg = []
-			for i_arg in [x for x in list(arg[0]) if type(x) == int]:
-				if type(i_arg) == int:
-					inner_arg.append("x"+str(i_arg))
-				elif type(i_arg) == str:
-					inner_arg.append(str(i_arg))
-				elif i_arg != []:
-					inner_arg.append(i_arg[1] if i_arg[1] == CONJUNCTION or i_arg[1] == NEGATION else FORM)
+			for i_arg in bound:
+				inner_arg.append("x"+str(i_arg))
 			ret += ",".join(inner_arg)
 			ret += ")"
 	return ret
@@ -214,7 +213,7 @@ def trans_lambda_rule_to_string(r):
 				ret += "," 
 			if type(arg) == tuple:
 				ret +="\" "
-			_arg, nt_last = trans_arg_to_string(index_map,index,arg,index == rindex_nempty(list(r[2][1])))
+			_arg, nt_last = trans_arg_to_string(index_map,index,arg,r[4][index],index == rindex_nempty(list(r[2][1])))
 			ret += _arg
 
 	if not nt_last: ret += " \""
@@ -223,7 +222,7 @@ def trans_lambda_rule_to_string(r):
 	ret +=  " @ " + r[0]
 	return ret
 
-def trans_arg_to_string(index_map,position,arg,last):
+def trans_arg_to_string(index_map,position,arg,bound,last):
 	ret = ""
 	has_args = True
 	if type(arg) == int:
@@ -233,17 +232,12 @@ def trans_arg_to_string(index_map,position,arg,last):
 	elif type(arg) == tuple:
 		ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1])
 		merged = "(" not in arg[1]
-		has_args = merged and len([x for x in list(arg[0]) if type(x) == int]) != 0
+		has_args = len(bound) != 0
 		if has_args:
 			ret += " \"("
 			inner_arg = []
-			for i_arg in [x for x in list(arg[0]) if type(x) == int]:
-				if type(i_arg) == int:
-					inner_arg.append("x"+str(i_arg))
-				elif type(i_arg) == str:
-					inner_arg.append(str(i_arg))
-				elif i_arg != []:
-					inner_arg.append(i_arg[1] if i_arg[1] == CONJUNCTION or i_arg[1] == NEGATION else FORM)
+			for i_arg in bound:
+				inner_arg.append("x"+str(i_arg))
 			ret += ",".join(inner_arg)
 			ret += ")"
 		elif not last:
@@ -344,7 +338,7 @@ def merge_unary(node):
 		node.childs = [] # clear the child ## DANGER MAY BECOME BUG
 
 		for e in unary_child.eorigin: node.eorigin.add(e)
-		for v in unary_child.vorigin: node.vorigin.add(v)
+		node.vorigin = unary_child.vorigin
 
 		node.label += "(" + ",".join(["x" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
 			 + select_label(unary_child.label)
