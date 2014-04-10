@@ -58,7 +58,7 @@ safesystem("$PIALIGN_DIR/script/itgstats.pl talign < $WORKING_DIR/align/align-ou
 
 # Visualizing alignment
 safesystem("$LETRAC_DIR/script/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.visin");
-safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align.txt 2 1 > $WORKING_DIR/align/tal-vis.txt");
+safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align.txt 2 1 > $WORKING_DIR/align/align.vis");
 exit(0) if $LAST_STEP eq "align"; 
 
 # Make it isomorphic
