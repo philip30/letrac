@@ -61,7 +61,7 @@ def main():
 			query_node,_ = merge_unary(query_node)
 
 		#### Extracting! finish indicates that extraction is performed until root
-		lex_rule, _, finish, _ = lex_acq([], query_node, sent, set([]))
+		lex_rule, _, finish, _ = lex_acq([], query_node, sent, set([]), args.void_span)
 		if finish: f += 1
 
 		#### Printing all results
@@ -76,14 +76,13 @@ def main():
 					print lambda_rule_to_string(r)
 			if args.verbose: print '-------------------------------------'
 		count += 1
-
 	#### Closing all files
 	map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
 
 	#### Printing stats
 	print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
 
-def lex_acq(rules, node, sent, parent_v, start=True):
+def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 	child_spans = []
 	w_i = sorted(list(node.eorigin))
 	w_i_max = sorted(list(node.e))
@@ -91,7 +90,7 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 	var_bound = [];
 	for i, child in enumerate(node.childs):
 		if len(child.childs) != 0 and len(child.e) != 0:
-			_, span, _legal, var_bound = lex_acq(rules, child, sent, set(list(node.vorigin)+list(parent_v)), start=False)
+			_, span, _legal, var_bound = lex_acq(rules, child, sent, set(list(node.vorigin)+list(parent_v)), void_span, start=False)
 			legal = legal and _legal
 			child_spans.append((i,span,var_bound))
 
@@ -119,8 +118,12 @@ def lex_acq(rules, node, sent, parent_v, start=True):
 					legal = False
 					break
 				elif previous != -1:
-					s_range = child_span[0]-previous-1
-					if s_range > 0: word.append(s_range)
+					if void_span:
+						s_range = child_span[0]-previous-1
+						if s_range > 0: word.append(s_range)
+					else:
+						for k in range(previous,child_span[0]-1):
+							word.append(sent[k])
 				previous = child_span[1]
 				if index == -1:
 					word.append(sent[child_span[0]])
@@ -364,6 +367,7 @@ def parse_argument():
 	parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
 	parser.add_argument('--include_fail',action="store_true",help="Include (partially) extracted rules even it is failed to extract until root.")
 	parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
+	parser.add_argument('--void_span', action="store_true",help="Give void span to unaligned words.")
 	return parser.parse_args()
 
 if __name__ == "__main__":

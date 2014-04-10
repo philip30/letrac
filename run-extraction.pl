@@ -9,6 +9,7 @@ binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
 my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
+my ($VOID_SPAN);
 
 GetOptions(
     # Necessary
@@ -21,6 +22,7 @@ GetOptions(
     "verbose!" => \$VERBOSE,
     "include-fail!" => \$INCLUDE_FAIL,
     "merge-unary!" => \$MERGE_UNARY,
+	"void-span!" => \$VOID_SPAN,
     "force!" => \$FORCE
 );
 
@@ -72,6 +74,7 @@ $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --translation_rule" if $TRANSLATION_RULE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
+$lex_command .= " --void_span" if $VOID_SPAN;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
 safesystem($lex_command);
 
