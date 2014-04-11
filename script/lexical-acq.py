@@ -76,6 +76,7 @@ def main():
 					print lambda_rule_to_string(r)
 			if args.verbose: print '-------------------------------------'
 		count += 1
+
 	#### Closing all files
 	map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
 
@@ -189,40 +190,43 @@ def arg_to_string(index_map,position,arg,bound):
 	return ret
 
 def trans_lambda_rule_to_string(r):
+	head, word, (label, arguments), var_bound, arg_bound = r
 	ret = ""
 	index_map = {}
-	for w in r[1]:
+	for w in word:
 		if type(w) == int:
 			if w < 0:
 				key = len(index_map)+1
-				arg_type = r[2][1][-w-1][1]
-				ret += "x" + str(key-1) +":"+(arg_type if arg_type == CONJUNCTION or arg_type == NEGATION else FORM) 
+				(arg_type, arg_label) = arguments[-w-1]
+				ret += "x" + str(key-1) +":" \
+					+(arg_label if arg_label == CONJUNCTION or arg_type == NEGATION else FORM) \
+					+ append_var_info(arg_bound[-w-1])
 				index_map[-w-1] = str(key)
 			else:
 				ret += "\"(" + str(w) + ")\""
 		else:
 			ret += '"' + w + '"'
 		ret += " "
-	ret += "@ " + r[0]
+	ret += "@ " + head + append_var_info(var_bound)
 	ret += " ||| \""
-	ret += "".join(["\\x" + str(x) for x in r[3]])
-	if len(r[3]) > 0: ret += "." 
-	ret += r[2][0] + "("
+	ret += "".join(["\\x" + str(x) for x in var_bound])
+	if len(var_bound) > 0: ret += "." 
+	ret += label + "("
 	args = []
 	nt_last = True
-	for index, arg in enumerate(r[2][1]):
+	for index, arg in enumerate(arguments):
 		if arg != []:
 			if index > 0:
 				ret += "," 
 			if type(arg) == tuple:
 				ret +="\" "
-			_arg, nt_last = trans_arg_to_string(index_map,index,arg,r[4][index],index == rindex_nempty(list(r[2][1])))
+			_arg, nt_last = trans_arg_to_string(index_map,index,arg,arg_bound[index],index == rindex_nempty(list(arguments)))
 			ret += _arg
 
 	if not nt_last: ret += " \""
-	ret += ")" * (1 + len([x for x in r[2][0] if x == '(']))
+	ret += ")" * (1 + len([x for x in label if x == '(']))
 	ret += "\""
-	ret +=  " @ " + r[0]
+	ret +=  " @ " + head + append_var_info(var_bound)
 	return ret
 
 def trans_arg_to_string(index_map,position,arg,bound,last):
@@ -233,8 +237,8 @@ def trans_arg_to_string(index_map,position,arg,bound,last):
 	elif type(arg) == str:
 		ret = arg
 	elif type(arg) == tuple:
-		ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1])
-		merged = "(" not in arg[1]
+		ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) \
+			+ append_var_info(bound)
 		has_args = len(bound) != 0
 		if has_args:
 			ret += " \"("
@@ -356,6 +360,9 @@ def select_label(label):
 	elif label == CONJUNCTION:
 		label = ""
 	return label
+
+def append_var_info(bound):
+	return "["+str(len(bound))+"]" if len(bound) != 0 else ""
 
 def parse_argument():
 	parser = argparse.ArgumentParser(description="Run Lexical Acquisition")
