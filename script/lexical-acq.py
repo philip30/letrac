@@ -101,7 +101,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 		# analyze rule
 		rule = transform_into_rule([],node,start,recurse=False)
 		if (len(rule) > 0) and is_leaf:
-			var_bound = [var for var in node.vorigin if type(var) == int]
+			var_bound = list(set([var for var in node.vorigin if type(var) == int] + list(node.vmerged)))
 			r = ( rule[0][0], ( sent_map(w_i,sent) ), ( node.label, set([c.label for c in node.childs]) ) , var_bound, [[]] * len(node.childs))
 			if len(node.v) == 0:
 				r[2][1].add(node.childs[0].label)
@@ -110,7 +110,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 		else:
 			previous = -1
 			word = []
-			var_bound = [] if start else [x for x in node.v if x in parent_v]
+			var_bound = [] if start else [x for x in node.v] #if x in parent_v]
 			arg_bound = [[]] * len(node.childs)
 			arguments = [[]] * len(node.childs)
 			for index, child_span, child_bound in child_spans:
@@ -138,7 +138,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 						arguments[i] = child.label
 
 				head = node.label if node.label == CONJUNCTION or node.label == NEGATION else rule[0][0]
-				r = (head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound)
+				r = (head , word , ( select_label(node.label), arguments ) , sorted(var_bound) , arg_bound)
 				node.type = r
 				rules.append( r )	
 	return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound
@@ -345,7 +345,7 @@ def merge_unary(node):
 		node.childs = [] # clear the child ## DANGER MAY BECOME BUG
 
 		for e in unary_child.eorigin: node.eorigin.add(e)
-		node.vorigin = unary_child.vorigin
+		for v in unary_child.vorigin: node.vorigin.add(v)
 
 		node.label += "(" + ",".join(["x" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
 			 + select_label(unary_child.label)

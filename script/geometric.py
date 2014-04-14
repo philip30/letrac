@@ -23,6 +23,7 @@ class SearchNode:
 		self.vorigin = set()
 		self.e = set()
 		self.eorigin = set()
+		self.vmerged = set()
 
 def extract(line,position=0,parent=""):
 	childs = []
