@@ -123,7 +123,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 						s_range = child_span[0]-previous-1
 						if s_range > 0: word.append(s_range)
 					else:
-						for k in range(previous,child_span[0]-1):
+						for k in range(previous+1,child_span[0]):
 							word.append(sent[k])
 				previous = child_span[1]
 				if index == -1:
@@ -158,8 +158,8 @@ def lambda_rule_to_string(r):
 		else:
 			ret += w
 		ret += " "
-	ret += "||| "
-	ret += "".join(["\\x" + str(x) for x in r[3]])
+	ret += "||| " 
+	ret += "".join(["\\x" + str(x) for x in reversed(r[3])])
 	if len(r[3]) > 0: ret += "." 
 	ret += r[2][0] + "("
 	args = []
@@ -209,7 +209,7 @@ def trans_lambda_rule_to_string(r):
 		ret += " "
 	ret += "@ " + head + append_var_info(var_bound)
 	ret += " ||| \""
-	ret += "".join(["\\x" + str(x) for x in var_bound])
+	ret += "".join(["\\x" + str(x) for x in reversed(var_bound)])
 	if len(var_bound) > 0: ret += "." 
 	ret += label + "("
 	args = []
