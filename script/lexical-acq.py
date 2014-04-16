@@ -209,7 +209,7 @@ def trans_lambda_rule_to_string(r):
 		ret += " "
 	ret += "@ " + head + append_var_info(var_bound)
 	ret += " ||| \""
-	ret += "".join(["\\x" + str(x) for x in reversed(var_bound)])
+	ret += "".join(["\\x_" + str(x) for x in reversed(var_bound)])
 	if len(var_bound) > 0: ret += "." 
 	ret += label + "("
 	args = []
@@ -233,7 +233,7 @@ def trans_arg_to_string(index_map,position,arg,bound,last):
 	ret = ""
 	has_args = True
 	if type(arg) == int:
-		ret = "x" + str(arg)
+		ret = "x_" + str(arg)
 	elif type(arg) == str:
 		ret = arg
 	elif type(arg) == tuple:

@@ -49,9 +49,12 @@ if (not (mkdir $WORKING_DIR) and $FORCE) {
 safesystem("mkdir $WORKING_DIR/data");
 safesystem("mkdir $WORKING_DIR/model");
 
+# Preparing input for alignment
+safesystem("$LETRAC_DIR/script/input_preprocess.py < $INPUT > $WORKING_DIR/data/$file_name.preprocess");
+
 # Creating input for alignment
 safesystem("mkdir $WORKING_DIR/align");
-safesystem("$LETRAC_DIR/script/align-gen.py --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $INPUT") or die "Failed on creating input for alignment";
+safesystem("$LETRAC_DIR/script/align-gen.py --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $WORKING_DIR/data/$file_name.preprocess") or die "Failed on creating input for alignment";
 exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
