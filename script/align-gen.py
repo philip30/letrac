@@ -12,6 +12,7 @@ from geometric import change_var_to_x
 from geometric import str_logical_rule
 from geometric import QUERY
 from geometric import FORM
+from geometric import query_representation
 
 many_literals = []
 words = set()
@@ -30,6 +31,7 @@ def main():
 	out_sent_g = open(args.osent + ".gin", "w")
 	out_log = open(args.ologic,"w")
 	out_log_g = open(args.ologic + ".gin", "w")
+	out_log_p = open(args.ologic + ".parse", "w")
 
 	out = None
 	if args.output:
@@ -62,6 +64,7 @@ def main():
 
 		out_log.write(" ".join(logical_rule) + "\n")
 		out_log_g.write(" ".join(logical_rule_giza)+ "\n")
+		out_log_p.write(query_representation(query_node,{value:key for key, value in var_map.items()},input_generator=True) +"\n")
 
 		if args.output:
 			out.write(" ".join(sentence) + "\n")
@@ -93,7 +96,7 @@ def main():
 	out_sent_g.close()
 	out_log_g.close()
 
-	print >> sys.stderr, "Successfully extracting :",  linecount, "rule(s)."
+	print >> sys.stderr, "Successfully extracting :",  linecount, "pair(s)."
 
 def str_giza_in_rule(rule):
 	if len(rule[2]) >= 1 and type(rule[2][0]) != int and rule[2][0] != QUERY and rule[2][0] != FORM:

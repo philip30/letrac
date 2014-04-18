@@ -69,13 +69,14 @@ def print_node(n,indent=0,stream=sys.stderr):
 	for i in range (n_child/2,n_child):
 		print_node(n.childs[i],indent+10,stream)
 
-def query_representation(node,map,root=True):
+def query_representation(node,map,input_generator=False,root=True):
 	ret = map[node.label] if type(node.label) == int else node.label
+	if node.label == '\+': ret += ' '
 	ret += node.type
 	for i, child in enumerate(node.childs):
 		if i != 0:
 			ret += ","
-		ret += query_representation(child,map,root=False)
+		ret += query_representation(child,map,input_generator,root=False)
 	if len(node.childs) != 0: ret += correspond[node.type]
 	if root: ret+= '.'
 	return ret
