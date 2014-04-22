@@ -70,10 +70,14 @@ def main():
 				print sent_line
 				print_node(query_node,stream=sys.stdout)
 			for r in lex_rule:
+				now_rule = r
+				if args.bare_rule:
+					label, arguments, bound, args_bound = bare_rule(r[2][0],r[2][1],r[3],r[4])
+					now_rule = (r[0],r[1],(label,arguments),bound,args_bound)
 				if args.translation_rule:
-					print trans_lambda_rule_to_string(r)
+					print trans_lambda_rule_to_string(now_rule)
 				else:
-					print lambda_rule_to_string(r)
+					print lambda_rule_to_string(now_rule)
 			if args.verbose: print '-------------------------------------'
 		count += 1
 
@@ -82,6 +86,37 @@ def main():
 
 	#### Printing stats
 	print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
+
+def bare_rule(label, args, bound, args_bound):
+	if bound == []:
+		if len(args_bound) == 1 and args_bound[0] != []:
+			delta = min(map(lambda x:x-1,args_bound[0]))
+			return format_label(label,delta), format_args(args,delta), bound,[map(lambda x:x-delta, args_bound[0])]		
+		else:
+			return label, args, bound, args_bound
+	else:
+		delta = min(map(lambda x:x-1, bound))
+		bound = map(lambda x: x-delta,bound)
+		args_bound = map(lambda x: map(lambda y: y-delta, x), args_bound)
+		return format_label(label,delta), format_args(args,delta), bound, args_bound
+
+def format_label(label, delta):
+	if delta <= 0: return label
+	scan = 0
+	find = label.find("x_")
+	if find != -1:
+		value = int(label[find+2]) - delta
+		return label[0:find] + "x_" + str(value)+label[find+3:]
+	return label
+
+def format_args(args, delta):
+	ret = []
+	for k in args:
+		if type(k) == int:
+			ret.append(k-delta)
+		else:
+			ret.append(k)
+	return ret
 
 def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 	child_spans = []
@@ -177,7 +212,7 @@ def arg_to_string(index_map,position,arg,bound):
 		ret = "x" + str(arg)
 	elif type(arg) == str:
 		ret = arg
-	elif type(arg) == tuple:
+	elif type(arg) == list or type(arg) == tuple:
 		ret = (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) + index_map[position] 
 		has_args = len(bound) != 0
 		if has_args:
@@ -191,6 +226,7 @@ def arg_to_string(index_map,position,arg,bound):
 
 def trans_lambda_rule_to_string(r):
 	head, word, (label, arguments), var_bound, arg_bound = r
+
 	ret = ""
 	index_map = {}
 	for w in word:
@@ -218,7 +254,7 @@ def trans_lambda_rule_to_string(r):
 		if arg != []:
 			if index > 0:
 				ret += "," 
-			if type(arg) == tuple:
+			if type(arg) == tuple or type(arg) == list:
 				ret +="\" "
 			_arg, nt_last = trans_arg_to_string(index_map,index,arg,arg_bound[index],index == rindex_nempty(list(arguments)))
 			ret += _arg
@@ -236,7 +272,7 @@ def trans_arg_to_string(index_map,position,arg,bound,last):
 		ret = "x_" + str(arg)
 	elif type(arg) == str:
 		ret = arg
-	elif type(arg) == tuple:
+	elif type(arg) == tuple or type(arg) == list:
 		ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) \
 			+ append_var_info(bound)
 		has_args = len(bound) != 0
@@ -347,7 +383,7 @@ def merge_unary(node):
 		for e in unary_child.eorigin: node.eorigin.add(e)
 		for v in unary_child.vorigin: node.vorigin.add(v)
 
-		node.label += "(" + ",".join(["x" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
+		node.label += "(" + ",".join(["x_" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
 			 + select_label(unary_child.label)
 		for unary_child_child in unary_child.childs:
 			node.childs.append(unary_child_child)
@@ -375,6 +411,7 @@ def parse_argument():
 	parser.add_argument('--include_fail',action="store_true",help="Include (partially) extracted rules even it is failed to extract until root.")
 	parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
 	parser.add_argument('--void_span', action="store_true",help="Give void span to unaligned words.")
+	parser.add_argument('--bare_rule', action="store_true",help="print rule independently.")
 	return parser.parse_args()
 
 if __name__ == "__main__":
