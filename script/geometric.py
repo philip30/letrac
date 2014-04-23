@@ -19,11 +19,11 @@ class SearchNode:
 		self.label = node.label
 		self.childs = node.childs
 		self.type = node.type
-		self.v = set()
-		self.vorigin = set()
+		self.v = []
+		self.vorigin = []
 		self.e = set()
 		self.eorigin = set()
-		self.vmerged = set()
+		self.vmerged = []
 
 def extract(line,position=0,parent=""):
 	childs = []

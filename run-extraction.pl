@@ -69,7 +69,7 @@ exit(0) if $LAST_STEP eq "align";
 
 # Make it isomorphic
 safesystem("mkdir $WORKING_DIR/iso");
-safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt --input $INPUT --out $WORKING_DIR/iso/$file_name.ism");
+safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt --input $WORKING_DIR/data/$file_name.preprocess --out $WORKING_DIR/iso/$file_name.ism");
 exit(0) if $LAST_STEP eq "isomorph"; 
 
 # lexical-acquisition
