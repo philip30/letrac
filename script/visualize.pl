@@ -46,7 +46,7 @@ while($estr = <EFILE> and $fstr = <FFILE> and $astr = <AFILE>) {
                 if(asciilength($str) == 1) { print " "; }
                 print $str;
             } else {
-				print "  ";
+                print "  ";
             }
         }
         print "\n";

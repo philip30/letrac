@@ -41,12 +41,15 @@ if(@ARGV != 0) {
 my $file_name = substr($INPUT, rindex($INPUT, '/')+1);
 
 # CREATING DIR
-if (not (mkdir $WORKING_DIR) and $FORCE) {
-    safesystem("rm -rf $WORKING_DIR");
-    safesystem("mkdir $WORKING_DIR");
-} elsif (not $FORCE) {
-    die "couldn't mkdir $WORKING_DIR";
-}
+if (not (mkdir $WORKING_DIR)) {
+    if ($FORCE) {
+        safesystem("rm -rf $WORKING_DIR");
+        safesystem("mkdir $WORKING_DIR");
+    } else {
+        die "couldn't mkdir $WORKING_DIR, directory exists.";
+    }
+} 
+
 safesystem("mkdir $WORKING_DIR/data");
 safesystem("mkdir $WORKING_DIR/model");
 

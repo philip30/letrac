@@ -245,7 +245,7 @@ def trans_lambda_rule_to_string(r):
         ret += " "
     ret += "@ " + head + append_var_info(var_bound)
     ret += " ||| \""
-    ret += "".join(["\\x_" + str(x) for x in reversed(var_bound)])
+    ret += "".join(["\\x_" + str(x) for x in reversed(sorted(var_bound))])
     if len(var_bound) > 0: ret += "."
     ret += label + "("
     args = []
@@ -271,6 +271,9 @@ def trans_arg_to_string(index_map,position,arg,bound,last):
     if type(arg) == int:
         ret = "x_" + str(arg)
     elif type(arg) == str:
+        if '_' in arg and len(arg) != 1:
+            arg = "'" + arg + "'"
+            arg = arg.replace('_','#$#')
         ret = arg
     elif type(arg) == tuple or type(arg) == list:
         ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) \
@@ -279,7 +282,7 @@ def trans_arg_to_string(index_map,position,arg,bound,last):
         if has_args:
             ret += " \"("
             inner_arg = []
-            for i_arg in bound:
+            for i_arg in sorted(bound):
                 inner_arg.append("x"+str(i_arg))
             ret += ",".join(inner_arg)
             ret += ")"
