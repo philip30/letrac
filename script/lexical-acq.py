@@ -2,6 +2,7 @@
 
 import sys
 import argparse
+import copy
 from collections import defaultdict
 from geometric import transform_into_rule
 from geometric import extract
@@ -61,8 +62,11 @@ def main():
             query_node,_ = merge_unary(query_node)
 
         #### Extracting! finish indicates that extraction is performed until root
-        lex_rule, _, finish, _ = lex_acq([], query_node, sent, [], args.void_span)
+        lex_rule, _, finish, _, _ = lex_acq([], query_node, sent, [], args.void_span)
         if finish: f += 1
+        
+        if not args.no_expand:
+            lex_rule = expand_rule(lex_rule)
 
         #### Printing all results
         if finish or args.include_fail:
@@ -80,12 +84,45 @@ def main():
                     print lambda_rule_to_string(now_rule)
             if args.verbose: print '-------------------------------------'
         count += 1
-
     #### Closing all files
     map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
+
+def expand_rule(initial_rule):
+    ret = []
+    for rule in initial_rule:
+        (head , word , ( label, arguments ) , var_bound , arg_bound) = rule
+        child_funcs = []
+        for (index,_word) in enumerate(word):
+            if _word < 0:
+                arg = arguments[-_word-1]
+                if type(arg) == tuple:
+                    child_funcs.append((index,arg))
+
+        enum = [('{0:0'+str(len(child_funcs))+'b}').format(x) for x in range(1,(2**len(child_funcs)))]
+        ret.append(rule)
+        min_x = min(0,min([x for x in map((lambda y: y if type(y) == int and y < 0 else 0), rule[1])]))
+        for binstring in enum:
+            funcs = [child_funcs[index] for (index,x) in enumerate(binstring) if x == '1']
+            rule_cpy = copy.deepcopy(rule)
+            for func in reversed(funcs):
+                (w_index, (arg_index,_)) = func
+                rule_cpy[1].pop(w_index)
+                offset = len(rule_cpy[2][1])
+                g = offset
+                for word_ in reversed(initial_rule[arg_index][1]):
+                    if type(word_) == int and word_ < 0:
+                        last = word_
+                        g+=1
+                        rule_cpy[1].insert(w_index,-g)
+                        rule_cpy[2][1].insert(offset,initial_rule[arg_index][2][1][-word_-1])
+                        rule_cpy[4].insert(offset,initial_rule[arg_index][4][-word_-1])
+                    else:
+                        rule_cpy[1].insert(w_index,word_)
+            ret.append(rule_cpy)
+    return ret
 
 def bare_rule(label, args, bound, args_bound):
     if bound == []:
@@ -126,13 +163,13 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
     var_bound = [];
     for i, child in enumerate(node.childs):
         if len(child.childs) != 0 and len(child.e) != 0:
-            _, span, _legal, var_bound = lex_acq(rules, child, sent, [x for x in node.vorigin if x not in parent_v]+parent_v, void_span, start=False)
+            _, span, _legal, var_bound, rule_number = lex_acq(rules, child, sent, [x for x in node.vorigin if x not in parent_v]+parent_v, void_span, start=False)
             legal = legal and _legal
-            child_spans.append((i,span,var_bound))
+            child_spans.append((i,span,var_bound,rule_number))
 
     if legal:
         is_leaf = len(child_spans) == 0
-        child_spans = sorted(list(child_spans)+[(-1,(x,x),[]) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
+        child_spans = sorted(list(child_spans)+[(-1,(x,x),[],-1) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
         # analyze rule
         rule = transform_into_rule([],node,start,recurse=False)
         if (len(rule) > 0) and is_leaf:
@@ -141,14 +178,13 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
             if len(node.v) == 0:
                 if node.childs[0].label not in r[2][1]: r[2][1].append(node.childs[0].label)
             rules.append( r )
-            node.type = r
         else:
             previous = -1
             word = []
             var_bound = [] if start else [x for x in node.v] #if x in parent_v]
             arg_bound = [[]] * len(node.childs)
             arguments = [[]] * len(node.childs)
-            for index, child_span, child_bound in child_spans:
+            for index, child_span, child_bound,rule_number in child_spans:
                 if child_span[0] < previous:
                     var_bound = []
                     legal = False
@@ -166,7 +202,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
                 else:
                     word.append(-index-1)
                     arg_bound[index]=child_bound
-                    arguments[index]=(node.childs[index].type[2][1],node.childs[index].label)
+                    arguments[index]=(rule_number,node.childs[index].label)
             else:
                 for i, child in enumerate(node.childs):
                     if child.label in node.vorigin and len(child.childs) == 0:
@@ -174,55 +210,54 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 
                 head = node.label if node.label == CONJUNCTION or node.label == NEGATION else rule[0][0]
                 r = (head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound)
-                node.type = r
                 rules.append( r )   
-    return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound
+    return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound, (len(rules)-1)
 
-def lambda_rule_to_string(r):
-    ret = r[0] + " ||| "
-    index_map = {}
-    for w in r[1]:
-        if type(w) == int:
-            if w < 0:
-                key = len(index_map)+1
-                arg_type = r[2][1][-w-1][1]
-                ret += (arg_type if arg_type == CONJUNCTION or arg_type == NEGATION else FORM) + str(key)
-                index_map[-w-1] = str(key)
-            else:
-                ret += "(" + str(w) + ")"
-        else:
-            ret += w
-        ret += " "
-    ret += "||| " 
-    ret += "".join(["\\x" + str(x) for x in reversed(r[3])])
-    if len(r[3]) > 0: ret += "." 
-    ret += r[2][0] + "("
-    args = []
-    for index, arg in enumerate(r[2][1]):
-        if arg != []:
-            args.append(arg_to_string(index_map,index,arg,r[4][index]))
-            
-    ret += ",".join(args)
-    ret += ")" * (1 + len([x for x in r[2][0] if x == '(']))
-    return ret
-
-def arg_to_string(index_map,position,arg,bound): 
-    ret = ""
-    if type(arg) == int:
-        ret = "x" + str(arg)
-    elif type(arg) == str:
-        ret = arg
-    elif type(arg) == list or type(arg) == tuple:
-        ret = (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) + index_map[position] 
-        has_args = len(bound) != 0
-        if has_args:
-            ret += "("
-            inner_arg = []
-            for i_arg in bound:
-                inner_arg.append("x"+str(i_arg))
-            ret += ",".join(inner_arg)
-            ret += ")"
-    return ret
+#def lambda_rule_to_string(r):
+#    ret = r[0] + " ||| "
+#    index_map = {}
+#    for w in r[1]:
+#        if type(w) == int:
+#            if w < 0:
+#                key = len(index_map)+1
+#                arg_type = r[2][1][-w-1][1]
+#                ret += (arg_type if arg_type == CONJUNCTION or arg_type == NEGATION else FORM) + str(key)
+#                index_map[-w-1] = str(key)
+#            else:
+#                ret += "(" + str(w) + ")"
+#        else:
+#            ret += w
+#        ret += " "
+#    ret += "||| " 
+#    ret += "".join(["\\x" + str(x) for x in reversed(r[3])])
+#    if len(r[3]) > 0: ret += "." 
+#    ret += r[2][0] + "("
+#    args = []
+#    for index, arg in enumerate(r[2][1]):
+#        if arg != []:
+#            args.append(arg_to_string(index_map,index,arg,r[4][index]))
+#            
+#    ret += ",".join(args)
+#    ret += ")" * (1 + len([x for x in r[2][0] if x == '(']))
+#    return ret
+#
+#def arg_to_string(index_map,position,arg,bound): 
+#    ret = ""
+#    if type(arg) == int:
+#        ret = "x" + str(arg)
+#    elif type(arg) == str:
+#        ret = arg
+#    elif type(arg) == list or type(arg) == tuple:
+#        ret = (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) + index_map[position] 
+#        has_args = len(bound) != 0
+#        if has_args:
+#            ret += "("
+#            inner_arg = []
+#            for i_arg in bound:
+#                inner_arg.append("x"+str(i_arg))
+#            ret += ",".join(inner_arg)
+#            ret += ")"
+#    return ret
 
 def trans_lambda_rule_to_string(r):
     head, word, (label, arguments), var_bound, arg_bound = r
@@ -250,13 +285,15 @@ def trans_lambda_rule_to_string(r):
     ret += label + "("
     args = []
     nt_last = True
+
     for index, arg in enumerate(arguments):
         if arg != []:
             if index > 0:
                 ret += "," 
             if type(arg) == tuple or type(arg) == list:
                 ret +="\" "
-            _arg, nt_last = trans_arg_to_string(index_map,index,arg,arg_bound[index],index == rindex_nempty(list(arguments)))
+            occ = (type(arg) == tuple or type(arg) == list) and (-index-1 not in word)
+            _arg, nt_last = trans_arg_to_string(index_map,index,arg,arg_bound[index],occ,index == rindex_nempty(list(arguments)))
             ret += _arg
 
     if not nt_last: ret += " \""
@@ -265,7 +302,7 @@ def trans_lambda_rule_to_string(r):
     ret +=  " @ " + head + append_var_info(var_bound)
     return ret
 
-def trans_arg_to_string(index_map,position,arg,bound,last):
+def trans_arg_to_string(index_map,position,arg,bound,occ,last):
     ret = ""
     has_args = True
     if type(arg) == int:
@@ -277,7 +314,8 @@ def trans_arg_to_string(index_map,position,arg,bound,last):
         ret = arg
     elif type(arg) == tuple or type(arg) == list:
         ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) \
-            + append_var_info(bound)
+            + append_var_info(bound) if not occ else \
+            "\"%s.%s(%s)\"" % (''.join(["\\x_"+str(i) for i in bound]),arg[1],','.join(["x_"+str(i) for i in bound]))
         has_args = len(bound) != 0
         if has_args:
             ret += " \"("
@@ -416,6 +454,7 @@ def parse_argument():
     parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
     parser.add_argument('--void_span', action="store_true",help="Give void span to unaligned words.")
     parser.add_argument('--bare_rule', action="store_true",help="print rule independently.")
+    parser.add_argument('--no_expand', action="store_true",help="Do not permute all the merging.")
     return parser.parse_args()
 
 if __name__ == "__main__":
