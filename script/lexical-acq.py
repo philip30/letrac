@@ -27,6 +27,7 @@ def main():
     sent_file = open(args.sent,'r')
     fol_file = open(args.fol,'r')
     align_file = open(args.align,'r')
+    rule_out_file = open(args.out_num_rule,'w')
 
     #### counter
     count = 0
@@ -82,10 +83,13 @@ def main():
                     print trans_lambda_rule_to_string(now_rule)
                 else:
                     print lambda_rule_to_string(now_rule)
+            print >> rule_out_file, len(lex_rule)
             if args.verbose: print '-------------------------------------'
+        else:
+            print >> rule_out_file, '0'
         count += 1
     #### Closing all files
-    map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
+    map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file,rule_out_file])
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
@@ -212,52 +216,6 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
                 r = (head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound)
                 rules.append( r )   
     return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound, (len(rules)-1)
-
-#def lambda_rule_to_string(r):
-#    ret = r[0] + " ||| "
-#    index_map = {}
-#    for w in r[1]:
-#        if type(w) == int:
-#            if w < 0:
-#                key = len(index_map)+1
-#                arg_type = r[2][1][-w-1][1]
-#                ret += (arg_type if arg_type == CONJUNCTION or arg_type == NEGATION else FORM) + str(key)
-#                index_map[-w-1] = str(key)
-#            else:
-#                ret += "(" + str(w) + ")"
-#        else:
-#            ret += w
-#        ret += " "
-#    ret += "||| " 
-#    ret += "".join(["\\x" + str(x) for x in reversed(r[3])])
-#    if len(r[3]) > 0: ret += "." 
-#    ret += r[2][0] + "("
-#    args = []
-#    for index, arg in enumerate(r[2][1]):
-#        if arg != []:
-#            args.append(arg_to_string(index_map,index,arg,r[4][index]))
-#            
-#    ret += ",".join(args)
-#    ret += ")" * (1 + len([x for x in r[2][0] if x == '(']))
-#    return ret
-#
-#def arg_to_string(index_map,position,arg,bound): 
-#    ret = ""
-#    if type(arg) == int:
-#        ret = "x" + str(arg)
-#    elif type(arg) == str:
-#        ret = arg
-#    elif type(arg) == list or type(arg) == tuple:
-#        ret = (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) + index_map[position] 
-#        has_args = len(bound) != 0
-#        if has_args:
-#            ret += "("
-#            inner_arg = []
-#            for i_arg in bound:
-#                inner_arg.append("x"+str(i_arg))
-#            ret += ",".join(inner_arg)
-#            ret += ")"
-#    return ret
 
 def trans_lambda_rule_to_string(r):
     head, word, (label, arguments), var_bound, arg_bound = r
@@ -448,6 +406,7 @@ def parse_argument():
     parser.add_argument('--sent',type=str,required=True,help="The sentence file")
     parser.add_argument('--fol',type=str,required=True,help="The sentence file in fol")
     parser.add_argument('--align',type=str,required=True,help="The alignment between sent to fol")
+    parser.add_argument('--out_num_rule',type=str,required=True,help="The output file where number of rules from each line is extracted.")
     parser.add_argument('--translation_rule',action="store_true",help="Output the rule into translation rule instead.")
     parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
     parser.add_argument('--include_fail',action="store_true",help="Include (partially) extracted rules even it is failed to extract until root.")

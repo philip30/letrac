@@ -76,7 +76,7 @@ safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file
 exit(0) if $LAST_STEP eq "isomorph"; 
 
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt";
+my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --translation_rule" if $TRANSLATION_RULE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
