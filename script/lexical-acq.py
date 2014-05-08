@@ -12,9 +12,9 @@ from geometric import change_var_to_x
 from geometric import str_logical_rule
 from geometric import kruskal
 from geometric import query_representation
+from stop_word_list import stop_word_list as stop
 
 # flag
-
 CONJUNCTION = "CONJ"
 NEGATION = "NOT"
 FORM = "FORM"
@@ -79,10 +79,11 @@ def main():
                 if args.bare_rule:
                     label, arguments, bound, args_bound = bare_rule(r[2][0],r[2][1],r[3],r[4])
                     now_rule = (r[0],r[1],(label,arguments),bound,args_bound)
-                if args.translation_rule:
-                    print trans_lambda_rule_to_string(now_rule)
-                else:
-                    print lambda_rule_to_string(now_rule)
+                rule_string = trans_lambda_rule_to_string(now_rule)
+                if args.three_sync:
+                    rule_string = extract_three_sync(rule_string)
+                if rule_string != "":
+                    print rule_string
             print >> rule_out_file, len(lex_rule)
             if args.verbose: print '-------------------------------------'
         else:
@@ -407,14 +408,65 @@ def parse_argument():
     parser.add_argument('--fol',type=str,required=True,help="The sentence file in fol")
     parser.add_argument('--align',type=str,required=True,help="The alignment between sent to fol")
     parser.add_argument('--out_num_rule',type=str,required=True,help="The output file where number of rules from each line is extracted.")
-    parser.add_argument('--translation_rule',action="store_true",help="Output the rule into translation rule instead.")
     parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
+    parser.add_argument('--three_sync',action="store_true",help="Extract 3-synchronous grammar.")
     parser.add_argument('--include_fail',action="store_true",help="Include (partially) extracted rules even it is failed to extract until root.")
     parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
     parser.add_argument('--void_span', action="store_true",help="Give void span to unaligned words.")
     parser.add_argument('--bare_rule', action="store_true",help="print rule independently.")
     parser.add_argument('--no_expand', action="store_true",help="Do not permute all the merging.")
     return parser.parse_args()
+
+# 3 Synch Grammar
+prec = defaultdict(lambda:0)
+prec['QUERY'] = 100
+prec['FORM'] = 50
+prec['CONJ'] = 30
+prec['NOT'] = 40
+def loop(l):
+    k = False
+    if len(l) == 3:
+        y = l[0]
+        if not (y[0] == '"' and y[-1] == '"'):
+            _, label = y.split(":")
+            return label == l[-1]
+    return k
+
+def unary_before(l):
+    k = False
+    if len(l) == 3:
+        y1,label2 = l[0], l[-1]
+        if y1[0] != '"' and y1[-1] != '"':
+            label1 = y1.split(":")[1]
+            if '[' in label1: label1 = label1[:label1.find('[')]
+            if '[' in label2: label2 = label2[:label2.find('[')]
+
+            if label1 not in prec: print >> sys.stderr, "Unrecognizable label:", label1
+            if label2 not in prec: print >> sys.stderr, "Unrecognizable label:", label2
+
+            return prec[label1] > prec[label2]
+    return k
+
+duplicate_filter = set()
+def extract_three_sync(rule):
+    line = rule.split(" ||| ")
+    left = []
+    for word in line[0].split():
+        if word[0] == '"' and word[-1] == '"':
+            wordi = word[1:-1]
+            if wordi == 'us' or wordi not in stop:
+                left.append(word)
+        else:
+            left.append(word)
+
+    if len(left) == 2 or loop(left) or unary_before(left):
+        rule = ""
+    elif (' '.join(left),line[0],line[1]) not in duplicate_filter:
+        duplicate_filter.add((' '.join(left),line[0],line[1]))
+        rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
+    else:
+        rule = ""
+    return rule
 
 if __name__ == "__main__":
     main()

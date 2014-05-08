@@ -8,8 +8,8 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $TRANSLATION_RULE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
-my ($VOID_SPAN, $BARE_RULE);
+my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
+my ($VOID_SPAN, $BARE_RULE, $THREE_SYNC);
 
 GetOptions(
     # Necessary
@@ -17,8 +17,8 @@ GetOptions(
     "pialign-dir=s" => \$PIALIGN_DIR,
     "working-dir=s" => \$WORKING_DIR,
     "input-file=s" => \$INPUT,
-    "translation-rule!" => \$TRANSLATION_RULE,
     "last-step=s" => \$LAST_STEP,
+    "three-sync"=> \$THREE_SYNC,
     "verbose!" => \$VERBOSE,
     "include-fail!" => \$INCLUDE_FAIL,
     "merge-unary!" => \$MERGE_UNARY,
@@ -78,11 +78,11 @@ exit(0) if $LAST_STEP eq "isomorph";
 # lexical-acquisition
 my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt";
 $lex_command .= " --verbose" if $VERBOSE;
-$lex_command .= " --translation_rule" if $TRANSLATION_RULE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
 $lex_command .= " --void_span" if $VOID_SPAN;
 $lex_command .= " --bare_rule" if $BARE_RULE;
+$lex_command .= " --three_sync" if $THREE_SYNC;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
 safesystem($lex_command);
 
