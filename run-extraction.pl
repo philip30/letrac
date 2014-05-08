@@ -54,11 +54,11 @@ safesystem("mkdir $WORKING_DIR/data");
 safesystem("mkdir $WORKING_DIR/model");
 
 # Preparing input for alignment
-safesystem("$LETRAC_DIR/script/input_preprocess.py < $INPUT > $WORKING_DIR/data/$file_name.preprocess");
+safesystem("$LETRAC_DIR/script/extract/input_preprocess.py < $INPUT > $WORKING_DIR/data/$file_name.preprocess");
 
 # Creating input for alignment
 safesystem("mkdir $WORKING_DIR/align");
-safesystem("$LETRAC_DIR/script/align-gen.py --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $WORKING_DIR/data/$file_name.preprocess") or die "Failed on creating input for alignment";
+safesystem("$LETRAC_DIR/script/extract/align-gen.py --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $WORKING_DIR/data/$file_name.preprocess") or die "Failed on creating input for alignment";
 exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
@@ -66,17 +66,17 @@ safesystem("$PIALIGN_DIR/src/bin/pialign $WORKING_DIR/data/$file_name.sent.gin $
 safesystem("$PIALIGN_DIR/script/itgstats.pl talign < $WORKING_DIR/align/align-out.1.samp > $WORKING_DIR/align/align.txt") or die "Failed on combining alignment";
 
 # Visualizing alignment
-safesystem("$LETRAC_DIR/script/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.visin");
-safesystem("$LETRAC_DIR/script/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align.txt 2 1 > $WORKING_DIR/align/align.vis");
+safesystem("$LETRAC_DIR/script/extract/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.visin");
+safesystem("$LETRAC_DIR/script/extract/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $WORKING_DIR/align/align.txt 2 1 > $WORKING_DIR/align/align.vis");
 exit(0) if $LAST_STEP eq "align"; 
 
 # Make it isomorphic
 safesystem("mkdir $WORKING_DIR/iso");
-safesystem("$LETRAC_DIR/script/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt --input $WORKING_DIR/data/$file_name.preprocess --out $WORKING_DIR/iso/$file_name.ism");
+safesystem("$LETRAC_DIR/script/extract/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt --input $WORKING_DIR/data/$file_name.preprocess --out $WORKING_DIR/iso/$file_name.ism");
 exit(0) if $LAST_STEP eq "isomorph"; 
 
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt";
+my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
