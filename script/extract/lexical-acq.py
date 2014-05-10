@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import sys
 import argparse
@@ -18,6 +18,9 @@ from stop_word_list import stop_word_list as stop
 CONJUNCTION = "CONJ"
 NEGATION = "NOT"
 FORM = "FORM"
+COUNT = "COUNT"
+
+TYPE_LABEL = set([CONJUNCTION, NEGATION, COUNT])
 
 def main():
     args = parse_argument()
@@ -79,9 +82,12 @@ def main():
                 if args.bare_rule:
                     label, arguments, bound, args_bound = bare_rule(r[2][0],r[2][1],r[3],r[4])
                     now_rule = (r[0],r[1],(label,arguments),bound,args_bound)
+                
+                #print now_rule
                 rule_string = trans_lambda_rule_to_string(now_rule)
                 if args.three_sync:
                     rule_string = extract_three_sync(rule_string)
+                
                 if rule_string != "":
                     print rule_string
             print >> rule_out_file, len(lex_rule)
@@ -89,6 +95,7 @@ def main():
         else:
             print >> rule_out_file, '0'
         count += 1
+    
     #### Closing all files
     map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file,rule_out_file])
 
@@ -104,7 +111,7 @@ def expand_rule(initial_rule):
             if _word < 0:
                 arg = arguments[-_word-1]
                 if type(arg) == tuple:
-                    child_funcs.append((index,arg))
+                    child_funcs.append((index,_word,arg))
 
         enum = [('{0:0'+str(len(child_funcs))+'b}').format(x) for x in range(1,(2**len(child_funcs)))]
         ret.append(rule)
@@ -113,7 +120,7 @@ def expand_rule(initial_rule):
             funcs = [child_funcs[index] for (index,x) in enumerate(binstring) if x == '1']
             rule_cpy = copy.deepcopy(rule)
             for func in reversed(funcs):
-                (w_index, (arg_index,_)) = func
+                (w_index, _word, (arg_index,_,_,_,_)) = func
                 rule_cpy[1].pop(w_index)
                 offset = len(rule_cpy[2][1])
                 g = offset
@@ -122,7 +129,9 @@ def expand_rule(initial_rule):
                         last = word_
                         g+=1
                         rule_cpy[1].insert(w_index,-g)
-                        rule_cpy[2][1].insert(offset,initial_rule[arg_index][2][1][-word_-1])
+                        rule_cpy[2][1][-_word-1][2].insert(offset,initial_rule[arg_index][2][1][-word_-1])
+                        rule_next = initial_rule[arg_index][2][1][-word_-1]
+                        rule_cpy[2][1].insert(offset,(-1,rule_next[1],rule_next[2],rule_next[3],rule_next[4]))
                         rule_cpy[4].insert(offset,initial_rule[arg_index][4][-word_-1])
                     else:
                         rule_cpy[1].insert(w_index,word_)
@@ -145,10 +154,10 @@ def bare_rule(label, args, bound, args_bound):
 def format_label(label, delta):
     if delta <= 0: return label
     scan = 0
-    find = label.find("x_")
+    find = label.find("x")
     if find != -1:
         value = int(label[find+2]) - delta
-        return label[0:find] + "x_" + str(value)+label[find+3:]
+        return label[0:find] + "x" + str(value)+label[find+3:]
     return label
 
 def format_args(args, delta):
@@ -174,11 +183,13 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 
     if legal:
         is_leaf = len(child_spans) == 0
+        node.leaf = is_leaf
         child_spans = sorted(list(child_spans)+[(-1,(x,x),[],-1) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
         # analyze rule
         rule = transform_into_rule([],node,start,recurse=False)
         if (len(rule) > 0) and is_leaf:
             var_bound = list([var for var in node.vorigin if type(var) == int and var not in node.vmerged] + list(node.vmerged))
+            node.extra_info = var_bound
             r = ( rule[0][0], ( sent_map(w_i,sent) ), ( node.label, ([c.label for c in node.childs]) ) , var_bound, [[]] * len(node.childs))
             if len(node.v) == 0:
                 if node.childs[0].label not in r[2][1]: r[2][1].append(node.childs[0].label)
@@ -186,7 +197,8 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
         else:
             previous = -1
             word = []
-            var_bound = [] if start else [x for x in node.v] #if x in parent_v]
+            var_bound = [] if start else [x for x in node.v if x in parent_v]
+            node.extra_info = var_bound
             arg_bound = [[]] * len(node.childs)
             arguments = [[]] * len(node.childs)
             for index, child_span, child_bound,rule_number in child_spans:
@@ -207,13 +219,14 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
                 else:
                     word.append(-index-1)
                     arg_bound[index]=child_bound
-                    arguments[index]=(rule_number,node.childs[index].label)
+                    arg_leaf_info = [gc.label for gc in node.childs[index].childs] if node.childs[index].leaf else []
+                    arguments[index]=(rule_number,node.childs[index].label,arg_leaf_info,node.childs[index].vorigin,node.childs[index].extra_info)
             else:
                 for i, child in enumerate(node.childs):
                     if child.label in node.vorigin and len(child.childs) == 0:
                         arguments[i] = child.label
 
-                head = node.label if node.label == CONJUNCTION or node.label == NEGATION else rule[0][0]
+                head = node.label if node.label in TYPE_LABEL else rule[0][0]
                 r = (head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound)
                 rules.append( r )   
     return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound, (len(rules)-1)
@@ -227,9 +240,9 @@ def trans_lambda_rule_to_string(r):
         if type(w) == int:
             if w < 0:
                 key = len(index_map)+1
-                (arg_type, arg_label) = arguments[-w-1]
+                (arg_type, arg_label,_,_,_) = arguments[-w-1]
                 ret += "x" + str(key-1) +":" \
-                    +(arg_label if arg_label == CONJUNCTION or arg_type == NEGATION else FORM) \
+                    +(arg_label if arg_label in TYPE_LABEL else FORM) \
                     + append_var_info(arg_bound[-w-1])
                 index_map[-w-1] = str(key)
             else:
@@ -238,53 +251,86 @@ def trans_lambda_rule_to_string(r):
             ret += '"' + w + '"'
         ret += " "
     ret += "@ " + head + append_var_info(var_bound)
-    ret += " ||| \""
-    ret += "".join(["\\x_" + str(x) for x in reversed(sorted(var_bound))])
-    if len(var_bound) > 0: ret += "."
-    ret += label + "("
+    logic = '"'
+    logic += "".join(["\\x" + str(x) for x in reversed(sorted(var_bound))])
+    if len(var_bound) > 0: logic += "."
+    logic += label + "("
     args = []
     nt_last = True
 
-    for index, arg in enumerate(arguments):
+    real_arg_len = 0
+    for arg in arguments:
+        if (type(arg) == tuple or type(arg) == list) and arg!= [] and arg[0] == -1:
+            break
+        real_arg_len += 1
+
+    for index in range (0,real_arg_len):
+        arg = arguments[index]
         if arg != []:
             if index > 0:
-                ret += "," 
+                logic += "," 
             if type(arg) == tuple or type(arg) == list:
-                ret +="\" "
+                logic +="\" "
             occ = (type(arg) == tuple or type(arg) == list) and (-index-1 not in word)
-            _arg, nt_last = trans_arg_to_string(index_map,index,arg,arg_bound[index],occ,index == rindex_nempty(list(arguments)))
-            ret += _arg
+            _arg, nt_last = trans_arg_to_string(index_map,index,arg,arg_bound[index],occ,index == rindex_nempty(list(arguments)),real_arg_len)
+            logic += _arg
 
-    if not nt_last: ret += " \""
-    ret += ")" * (1 + len([x for x in label if x == '(']))
-    ret += "\""
-    ret +=  " @ " + head + append_var_info(var_bound)
-    return ret
+    if not nt_last: logic += " \""
+    logic += ")" * (1 + len([x for x in label if x == '(']))
+    logic += "\""
+    logic+=  " @ " + head + append_var_info(var_bound)
+    return ret + " ||| " + ammeliorate_error(logic)
 
-def trans_arg_to_string(index_map,position,arg,bound,occ,last):
+def ammeliorate_error(logic):
+    return logic.replace(' " ', ' ') 
+
+def trans_arg_to_string(index_map,position,arg,bound,occ,last,real_arg_len):
     ret = ""
     has_args = True
     if type(arg) == int:
-        ret = "x_" + str(arg)
+        ret = "x" + str(arg)
     elif type(arg) == str:
         if '_' in arg and len(arg) != 1:
             arg = "'" + arg + "'"
             arg = arg.replace('_','#$#')
         ret = arg
     elif type(arg) == tuple or type(arg) == list:
-        ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg[1] != CONJUNCTION and arg[1] != NEGATION else arg[1]) \
-            + append_var_info(bound) if not occ else \
-            "\"%s.%s(%s)\"" % (''.join(["\\x_"+str(i) for i in bound]),arg[1],','.join(["x_"+str(i) for i in bound]))
-        has_args = len(bound) != 0
-        if has_args:
-            ret += " \"("
-            inner_arg = []
-            for i_arg in sorted(bound):
-                inner_arg.append("x"+str(i_arg))
-            ret += ",".join(inner_arg)
-            ret += ")"
-        elif not last:
-            ret += " \""
+        (_, arg_label, arg_inner, v_orig, arg_bound) = arg
+        if position in index_map or all(type(x) == int for x in arg_inner) or len(arg_inner) == 0:
+            ret = "x" + str(int(index_map[position])-1) +":"+ (FORM if arg_label not in TYPE_LABEL else arg_label) \
+                + append_var_info(bound) if not occ else \
+                "\"%s.%s(%s)\"" % (''.join(["\\x"+str(i) for i in bound]),arg_label,','.join(["x"+str(i) for i in bound]))
+            has_args = len(bound) != 0
+            if has_args:
+                ret += " \"("
+                inner_arg = []
+                for i_arg in sorted(bound):
+                    inner_arg.append("x"+str(i_arg))
+                ret += ",".join(inner_arg)
+                ret += ")"
+            elif not last:
+                ret += " \""
+        else:
+            ret += '"'
+            if len(bound) != 0:
+                ret += ''.join(["\\x"+str(i) for i in bound])
+                ret += '.'
+           
+            arg_inn_ =["x" + str(i) for i in v_orig]
+            for (index,arg_inn) in enumerate(arg_inner):
+                if type(arg_inn) == str:
+                    if '_' in arg_inn and len(arg_inn) != 1:
+                        arg_inn = "'" + arg_inn + "'"
+                        arg_inn = arg_inn.replace('_','#$#')
+                    arg_inn_.append(arg_inn)
+                elif type(arg_inn) == tuple or type(arg_inn) == list:
+                    var_label = 'FORM' if arg_inn[1] not in TYPE_LABEL else arg_inn[1]
+                    lambda_var = ("(" + ','.join(['x' + str(i) for i in arg_inn[4]]) + ")") if len(arg_inn[4]) != 0 else ""
+                    arg_inn_.append('" x%d:%s%s "%s' % (int(index_map[real_arg_len+len(arg_inner)-index-1])-1,var_label,append_var_info(arg_inn[4]),lambda_var))
+            has_args = len(bound) != 0
+            arg_inn_ = ','.join(arg_inn_)
+            ret += select_label(arg_label) + "("  + arg_inn_ + ")"+ (("(" + ','.join(map(lambda x: "x"+str(x),bound)) +")") if has_args else "") + '"'
+            if not last: ret += " \""
     return ret, has_args
 
 def sent_map(span,sent):
@@ -342,6 +388,8 @@ def change_not_and_conj(node):
         node.label = CONJUNCTION
     elif node.label == '\+':
         node.label = NEGATION
+    elif node.label == 'count':
+        node.label = COUNT
     for (i, child) in enumerate(node.childs):
         node.childs[i] = change_not_and_conj(child)
     return node
@@ -384,7 +432,7 @@ def merge_unary(node):
         for v in unary_child.vorigin: 
             if v not in node.vorigin: node.vorigin.append(v)
 
-        node.label += "(" + ",".join(["x_" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
+        node.label += "(" + ",".join(["x" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
              + select_label(unary_child.label)
         for unary_child_child in unary_child.childs:
             node.childs.append(unary_child_child)
@@ -396,10 +444,13 @@ def select_label(label):
         label = "-"
     elif label == CONJUNCTION:
         label = ""
+    elif label == COUNT:
+        label = "count"
     return label
 
 def append_var_info(bound):
-    return "["+str(len(bound))+"]" if len(bound) != 0 else ""
+    bound_wo = [x for x in bound if type(x) == int]
+    return "["+str(len(bound_wo))+"]" if len(bound_wo) != 0 else ""
 
 def parse_argument():
     parser = argparse.ArgumentParser(description="Run Lexical Acquisition")
@@ -420,6 +471,7 @@ def parse_argument():
 # 3 Synch Grammar
 prec = defaultdict(lambda:0)
 prec['QUERY'] = 100
+prec['COUNT'] = 70
 prec['FORM'] = 50
 prec['CONJ'] = 30
 prec['NOT'] = 40
@@ -447,7 +499,6 @@ def unary_before(l):
             return prec[label1] > prec[label2]
     return k
 
-duplicate_filter = set()
 def extract_three_sync(rule):
     line = rule.split(" ||| ")
     left = []
@@ -461,11 +512,8 @@ def extract_three_sync(rule):
 
     if len(left) == 2 or loop(left) or unary_before(left):
         rule = ""
-    elif (' '.join(left),line[0],line[1]) not in duplicate_filter:
-        duplicate_filter.add((' '.join(left),line[0],line[1]))
-        rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
     else:
-        rule = ""
+        rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
     return rule
 
 if __name__ == "__main__":

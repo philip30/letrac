@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import sys
 
@@ -11,8 +11,6 @@ def main():
             line = line.replace("x"+(str(x)), G[x])
             line = line.replace("x_"+(str(x)), G[x])
         print line+'.'
-
-
 
 if __name__ == '__main__':
     main()

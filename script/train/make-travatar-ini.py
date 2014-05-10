@@ -1,8 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import sys
 
-feature={'parse':0.3,'lm':0.8,'psgl':0.05,'plgs':0.05,'count':0.05,'prob':0.05,'unk':-1}
+feature={'parse':0.3,'lm':0.8,'psgl':0.05,'plgs':0.05,'count':0.05,'prob':0.05,'del':-1}
 
 def main():
     write_config('tm_file',sys.argv[1])

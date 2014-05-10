@@ -24,6 +24,8 @@ class SearchNode:
         self.e = set()
         self.eorigin = set()
         self.vmerged = []
+        self.extra_info = None
+        self.leaf= False
 
 def extract(line,position=0,parent=""):
     childs = []

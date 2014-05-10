@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use strict;
 use utf8;
@@ -8,7 +8,7 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
+my ($PIALIGN_DIR, $WORKING_DIR, $NO_EXPAND, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
 my ($VOID_SPAN, $BARE_RULE, $THREE_SYNC);
 
 GetOptions(
@@ -24,6 +24,7 @@ GetOptions(
     "merge-unary!" => \$MERGE_UNARY,
 	"void-span!" => \$VOID_SPAN,
 	"bare-rule!" => \$BARE_RULE,
+    "no-expand!" => \$NO_EXPAND,
     "force!" => \$FORCE
 );
 
@@ -59,6 +60,7 @@ safesystem("$LETRAC_DIR/script/extract/input_preprocess.py < $INPUT > $WORKING_D
 # Creating input for alignment
 safesystem("mkdir $WORKING_DIR/align");
 safesystem("$LETRAC_DIR/script/extract/align-gen.py --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $WORKING_DIR/data/$file_name.preprocess") or die "Failed on creating input for alignment";
+safesystem("$LETRAC_DIR/script/extract/swr.py < $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.kword") if ($THREE_SYNC);
 exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
@@ -83,6 +85,7 @@ $lex_command .= " --merge_unary" if $MERGE_UNARY;
 $lex_command .= " --void_span" if $VOID_SPAN;
 $lex_command .= " --bare_rule" if $BARE_RULE;
 $lex_command .= " --three_sync" if $THREE_SYNC;
+$lex_command .= " --no_expand" if $NO_EXPAND;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
 safesystem($lex_command);
 

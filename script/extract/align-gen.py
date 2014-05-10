@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # Logical Form extraction 
 # Philip Arthur
 

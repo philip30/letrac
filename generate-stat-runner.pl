@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use strict;
 use utf8;
 use threads;
@@ -11,7 +11,7 @@ binmode STDERR, ":utf8";
 my ($PREFIX,$SICSTUS_LOCATION,$GEOQUERY_LOCATION,$LETRAC,$REF,$OUTPUT);
 my $LETRAC=".";
 my $THREADS=28;
-
+my $TUNE_FACTOR=0;
 GetOptions(
     "prefix=s" => \$PREFIX,
 	"sicstus-dir=s" => \$SICSTUS_LOCATION,
@@ -19,6 +19,7 @@ GetOptions(
 	"letrac-dir=s"=> \$LETRAC,
 	"ref=s"=> \$REF,
 	"output=s" => \$OUTPUT,
+    "tune-factor=i" => \$TUNE_FACTOR,
     "threads=s"=> \$THREADS,
 );
 
@@ -31,7 +32,8 @@ my $lines=int($lines/$THREADS);
 my $split_dir = "$PREFIX\_split";
 safesystem("rm -rf $split_dir") if (-d $split_dir);
 safesystem("mkdir $split_dir") or die;
-safesystem("split $PREFIX.uniq -l $lines $split_dir/file -d") or die;
+safesystem("$LETRAC/script/tune/split_factor.py $TUNE_FACTOR $PREFIX.uniq > $PREFIX.uniq.factor");
+safesystem("split $PREFIX.uniq.factor -l $lines $split_dir/file -d") or die;
 safesystem("ls $split_dir");
 sleep(0.5);
 # MAP

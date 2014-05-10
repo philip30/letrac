@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # (C) Copyright 2013 Philip Arthur, NAIST
 # 
