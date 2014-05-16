@@ -4,7 +4,7 @@ import sys
 import argparse
 
 MAX_VAR = 10
-DELAY = 100
+DELAY = 2000
 OMIT_SET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[MAX_VAR:])
 
 def validate(line,gs):

@@ -13,6 +13,7 @@ from geometric import str_logical_rule
 from geometric import kruskal
 from geometric import query_representation
 from stop_word_list import stop_word_list as stop
+from find_error import check_valid_sync_symbol
 
 # flag
 CONJUNCTION = "CONJ"
@@ -87,8 +88,13 @@ def main():
                 rule_string = trans_lambda_rule_to_string(now_rule)
                 if args.three_sync:
                     rule_string = extract_three_sync(rule_string)
-                
+
                 if rule_string != "":
+                    if not check_valid_sync_symbol(rule_string):
+                        print >> sys.stderr, "--- N O T  V A L I D ---"
+                        print >> sys.stderr, rule_string
+                        print_rule(now_rule)
+                        sys.exit(1)
                     print rule_string
             print >> rule_out_file, len(lex_rule)
             if args.verbose: print '-------------------------------------'
@@ -101,6 +107,12 @@ def main():
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
+
+def print_rule(rule):
+    (head, word, (label, arguments) , var_bound ,arg_bound ) = rule
+    print >> sys.stderr, head, word, label, arg_bound
+    for (arg, arg_b) in zip (arguments, arg_bound):
+        print >> sys.stderr, arg, arg_b
 
 def expand_rule(initial_rule):
     ret = []
@@ -124,17 +136,18 @@ def expand_rule(initial_rule):
                 rule_cpy[1].pop(w_index)
                 offset = len(rule_cpy[2][1])
                 g = offset
-                for word_ in reversed(initial_rule[arg_index][1]):
+                for word_ in initial_rule[arg_index][1]:
                     if type(word_) == int and word_ < 0:
                         last = word_
                         g+=1
                         rule_cpy[1].insert(w_index,-g)
-                        rule_cpy[2][1][-_word-1][2].insert(offset,initial_rule[arg_index][2][1][-word_-1])
+                        rule_cpy[2][1][-_word-1][2].append(initial_rule[arg_index][2][1][-word_-1])
                         rule_next = initial_rule[arg_index][2][1][-word_-1]
                         rule_cpy[2][1].insert(offset,(-1,rule_next[1],rule_next[2],rule_next[3],rule_next[4]))
                         rule_cpy[4].insert(offset,initial_rule[arg_index][4][-word_-1])
                     else:
                         rule_cpy[1].insert(w_index,word_)
+
             ret.append(rule_cpy)
     return ret
 
