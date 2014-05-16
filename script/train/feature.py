@@ -37,6 +37,7 @@ for i,line in enumerate(sys.stdin):
     for word in sent.split():
         if len(word) > 1 and word[0] == '"' and word[-1] == '"':
             word_fp.add(word[1:-1])
+
     count[sent,log] += 1
     context[sent] += 1
     context[log] += 1

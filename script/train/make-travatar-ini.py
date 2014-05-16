@@ -12,11 +12,11 @@ def main():
     write_config('tm_storage','fsm')
     write_config('root_symbol','QUERY')
     write_config('default_symbol','FORM')
-    write_config('trg_factors','2')
+    write_config('trg_factors','2' if len(sys.argv) > 3 and sys.argv[3] == '-three_sync' else '1')
 
     if len(sys.argv) > 2:
         write_config('lm_file',sys.argv[2])
-
+    
     # Printing weight
     print "[weight_vals]"
     for weight_key, weight_val in feature.items():

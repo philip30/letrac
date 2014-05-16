@@ -2,6 +2,7 @@
 use strict;
 use utf8;
 use threads;
+use POSIX;
 use Getopt::Long;
 use List::Util qw(sum min max shuffle);
 binmode STDIN, ":utf8";
@@ -28,7 +29,7 @@ open(FH,"$PREFIX.uniq") or die "$!";
 $lines++ while <FH>;
 close FH;
 
-my $lines=int($lines/$THREADS);
+my $lines=int(ceil($lines/$THREADS));
 my $split_dir = "$PREFIX\_split";
 safesystem("rm -rf $split_dir") if (-d $split_dir);
 safesystem("mkdir $split_dir") or die;
@@ -74,6 +75,7 @@ sub stat_gen {
     safesystem("cat $dir.query | $SICSTUS_LOCATION/bin/sicstus 2> $dir.geoquery.log | awk 'NF' > $dir.semout") or die;
     sleep(0.1);
     safesystem("$LETRAC/script/tune/synchronize_semantic_output.py $dir.geoquery.log $dir.semout > $dir.semout.sync") or die;
+    print STDERR "$dir execution is done.\n";
 }
 
 
