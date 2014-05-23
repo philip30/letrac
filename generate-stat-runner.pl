@@ -9,7 +9,7 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PREFIX,$SICSTUS_LOCATION,$GEOQUERY_LOCATION,$LETRAC,$REF,$OUTPUT);
+my ($PREFIX,$DATABASE_DIR,$SICSTUS_LOCATION,$GEOQUERY_LOCATION,$LETRAC,$REF,$OUTPUT);
 my $LETRAC=".";
 my $THREADS=28;
 my $TUNE_FACTOR=0;
@@ -22,6 +22,7 @@ GetOptions(
 	"output=s" => \$OUTPUT,
     "tune-factor=i" => \$TUNE_FACTOR,
     "threads=s"=> \$THREADS,
+    "database-dir=s" => \$DATABASE_DIR, 
 );
 
 my $lines=0;
@@ -29,6 +30,8 @@ open(FH,"$PREFIX.uniq") or die "$!";
 $lines++ while <FH>;
 close FH;
 
+safesystem("$LETRAC/script/tune/qdatabase.py $DATABASE_DIR") if $DATABASE_DIR;
+my $database_cmd = $DATABASE_DIR ? " --database $DATABASE_DIR" : "";
 my $lines=int(ceil($lines/$THREADS));
 my $split_dir = "$PREFIX\_split";
 safesystem("rm -rf $split_dir") if (-d $split_dir);
@@ -52,7 +55,7 @@ foreach my $thread (@all_threads) {
 closedir(DIR);
 
 # REDUCE
-for my $data (qw(qdata reduct n geoquery.log semout semout.sync)) {
+for my $data (qw(qdata reduct n geoquery.log semout semout.sync query)) {
     safesystem("cat $split_dir/file*.$data > $PREFIX.$data");
 }
 safesystem("$LETRAC/script/tune/generate_stat_data.py --gs $REF --semout $PREFIX.semout.sync --n $PREFIX.n > $OUTPUT") or die;
@@ -70,11 +73,11 @@ sub stat_gen {
     sleep(0.1);
     safesystem("$LETRAC/script/tune/breduct.py --alphabet < $dir.qdata > $dir.reduct") or die;
     sleep(0.1);
-    safesystem("$LETRAC/script/tune/generate_query_data.py $dir.reduct $GEOQUERY_LOCATION $dir.query")or die;
+    safesystem("$LETRAC/script/tune/generate_query_data.py --input $dir.reduct --geoquery_dir $GEOQUERY_LOCATION --output $dir.query$database_cmd")or die;
     sleep(0.1);
     safesystem("cat $dir.query | $SICSTUS_LOCATION/bin/sicstus 2> $dir.geoquery.log | awk 'NF' > $dir.semout") or die;
     sleep(0.1);
-    safesystem("$LETRAC/script/tune/synchronize_semantic_output.py $dir.geoquery.log $dir.semout > $dir.semout.sync") or die;
+    safesystem("$LETRAC/script/tune/synchronize_semantic_output.py --log_file $dir.geoquery.log --output $dir.semout --sync $dir.qsync$database_cmd > $dir.semout.sync") or die;
     print STDERR "$dir execution is done.\n";
 }
 

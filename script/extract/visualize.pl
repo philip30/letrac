@@ -27,10 +27,12 @@ sub asciilength {
     return $ret;
 }
 
+my $line = 0;
 my ($i, $j);
 my (@actives, $actmax, $estr, $fstr, $astr);
 while($estr = <EFILE> and $fstr = <FFILE> and $astr = <AFILE>) {
     chomp $estr; chomp $fstr; chomp $astr;
+    print $line."\n";
     # if(not $astr) { next; print "\n"; }
     my %active = map { my ($e,$f) = split(/-/); my $id = "".$e."-".$f; $id => 1 } split(/ /,$astr);
     my @e = split(/ /,$estr);
@@ -61,4 +63,5 @@ while($estr = <EFILE> and $fstr = <FFILE> and $astr = <AFILE>) {
         print "\n";
     }
     print "\n";
+    $line++;
 }

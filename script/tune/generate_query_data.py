@@ -2,9 +2,10 @@
 
 import sys
 import argparse
+import qdatabase
 
-MAX_VAR = 10
-DELAY = 30000
+MAX_VAR = 6
+DELAY = 10000
 OMIT_SET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[MAX_VAR:])
 
 def validate(line,gs):
@@ -25,21 +26,30 @@ def validate(line,gs):
     if ret[-1] == '.': ret = ret[:-1]
 
     if any(x in OMIT_SET for x in ret):
-        ret = 'stateid(omit) ?'
+        ret = 'stateid(omit)?'
 
     if gs: 
         return ret + "."
     else:
-        return "time_out(" +ret + ", %d, Res)." % (DELAY)
+        return "time_out(" +ret + ",%d,Res)." % (DELAY)
 
 def main():
-    generate_query_data(sys.argv[1],sys.argv[2],sys.argv[3],len(sys.argv)>4)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', type=str)
+    parser.add_argument('--geoquery_dir', type=str)
+    parser.add_argument('--gold_standard',action='store_true')
+    parser.add_argument('--output',type=str)
+    parser.add_argument('--database',type=str)
+    args = parser.parse_args()
 
-def generate_query_data(input_arg,geoquery_arg,out_arg,is_gs):
+    generate_query_data(args.input,args.geoquery_dir,args.output,args.gold_standard, args.database)
+
+def generate_query_data(input_arg,geoquery_arg,out_arg,is_gs,database):
     inp = open(input_arg, "r")
     geoquery_location = geoquery_arg
     out = open(out_arg, "w")
-    
+    qsync = open(out_arg[0:out_arg.rfind(".")]+".qsync","w")
+
     print >> out, "compile('" + geoquery_location + "')."
     print >> out, ""
 
@@ -49,10 +59,23 @@ def generate_query_data(input_arg,geoquery_arg,out_arg,is_gs):
     print >> out, load_timeout()
     print >> out, ""
 
+    db_map = {}
     for line in inp:
         line = line.strip()
-        print >> out, validate(line.replace("-","\\+ ").replace("#$#", ' '),is_gs)
-        print >> out, ""
+        query = validate(line.replace("-","\\+ ").replace("#$#", ' '),is_gs)
+        qmap = {}
+        if not database or (query not in qmap and not qdatabase.exists(database,query)):
+            qmap[query] = 1
+            print >> out, query 
+            print >> out, ""
+            print >> qsync, "exec\t"+query
+        else:
+            print >> qsync, "read\t"+query
+
+    inp.close()
+    out.close()
+    qsync.close()
+
 
 def set_prolog_print_all_list():
     return "set_prolog_flag(toplevel_print_options,[max_depth(1000),quoted(true)])."

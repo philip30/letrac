@@ -23,7 +23,7 @@ FORM = "FORM"
 COUNT = "COUNT"
 LEAF = "LEAF"
 
-TYPE_LABEL = set([CONJUNCTION, NEGATION, COUNT,LEAF])
+TYPE_LABEL = set([CONJUNCTION,NEGATION,LEAF])
 
 def main():
     args = parse_argument()
@@ -40,7 +40,7 @@ def main():
     f = 0
 
     #### For input-sentence-fol-alignment
-    for (inp_line,sent_line, fol_line, align_line) in zip(inp_file,sent_file,fol_file,align_file):
+    for (index,(inp_line,sent_line, fol_line, align_line)) in enumerate(zip(inp_file,sent_file,fol_file,align_file)):
         inp_line = inp_line.strip()
         query = extract(inp_line)[0][0]
         (sentence_node, query_node) = query.childs # get the tree representation by extracting the geoquery
@@ -74,24 +74,24 @@ def main():
         
         if not args.no_expand:
             lex_rule = expand_rule(lex_rule)
-
+        
+        removed = set()
         #### Printing all results
         if finish or args.include_fail:
             if args.verbose:
-                print sent_line
+                print index, sent_line
                 print_node(query_node,stream=sys.stdout)
-            for r in lex_rule:
+            for index, r in enumerate(lex_rule):
                 now_rule = r
                 if args.bare_rule:
                     label, arguments, bound, args_bound = bare_rule(r[2][0],r[2][1],r[3],r[4])
                     now_rule = (r[0],r[1],(label,arguments),bound,args_bound)
-                
                 #print now_rule
                 rule_string = trans_lambda_rule_to_string(now_rule)
                 if args.three_sync:
                     rule_string = extract_three_sync(rule_string)
 
-                if rule_string != "":
+                if rule_string != "" and arg_not_removed(now_rule, removed):
                     if not check_valid_sync_symbol(rule_string):
                         print >> sys.stderr, "--- N O T  V A L I D ---"
                         print >> sys.stderr, rule_string
@@ -99,10 +99,15 @@ def main():
                         print_rule(now_rule)
                         sys.exit(1)
                     print rule_string
+                else:
+                    removed.add(now_rule[2][0])
             print >> rule_out_file, len(lex_rule)
-            if args.verbose: print '-------------------------------------'
         else:
+            if args.verbose:
+                print index, ' is failed to parse.'    
             print >> rule_out_file, '0'
+        if args.verbose: print '-------------------------------------'
+        
         count += 1
     
     #### Closing all files
@@ -110,6 +115,13 @@ def main():
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
+
+def arg_not_removed(rule, rs):
+    for word in rule[1]:
+        if type(word) == int and word < 0:
+            if rule[2][1][-word-1][5] in rs:
+                return False
+    return True
 
 def print_rule(rule):
     (head, word, (label, arguments) , var_bound ,arg_bound ) = rule
@@ -139,7 +151,7 @@ def expand_rule(initial_rule):
                 rule_cpy[1].pop(w_index)
                 offset = len(rule_cpy[2][1])
                 g = offset
-                for word_ in initial_rule[arg_index][1]:
+                for word_ in reversed(initial_rule[arg_index][1]):
                     if type(word_) == int and word_ < 0:
                         last = word_
                         g+=1
@@ -251,7 +263,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
 
 def assign_head(func_label):
    ret = func_label if func_label in TYPE_LABEL else FORM
-   if func_label == 'count': ret = COUNT
+   if func_label == 'count' and COUNT in TYPE_LABEL: ret = COUNT
    return ret 
 
 def trans_lambda_rule_to_string(r):

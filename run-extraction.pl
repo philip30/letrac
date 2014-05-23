@@ -28,16 +28,6 @@ GetOptions(
     "force!" => \$FORCE
 );
 
-# Sanity check
-if((not $PIALIGN_DIR) or (not $WORKING_DIR) or (not $INPUT) or (not $LETRAC_DIR)) {
-    die "Must specify pialign-dir, working-dir, input, and letrac-dir\n";
-}
-
-if(@ARGV != 0) {
-    print STDERR "Usage: $0 -pialign-dir /path/to/pialign -working-dir WORKING_DIR -input INPUT_FILE -letrac-dir LETRAC_DIR\n";
-    exit 1;
-}
-
 ### START HERE
 my $file_name = substr($INPUT, rindex($INPUT, '/')+1);
 

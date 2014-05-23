@@ -11,6 +11,15 @@ class RenameMap:
         self.i += 1
         return "x_" + str(self.i-1) 
 
+def check_output(output):
+    depth = 0
+    for c in output:
+        if c == '(':
+            depth += 1
+        elif c == ')':
+            depth -= 1
+    return depth == 0
+
 def main():
     parser = argparse.ArgumentParser(description="Run Beta Reduction")
     parser.add_argument('--alphabet', action="store_true",help="map x_n or xn to alphabet[n]")
@@ -19,6 +28,12 @@ def main():
     for line in sys.stdin:
         line = line.strip()
         output = breduct(line,RenameMap())
+        
+        if not check_output(output):
+            print >> sys.stderr, "This output does not have correct parentheses:", output
+            sys.exit(1)
+
+
         print (output if not args.alphabet else change_x_to_var(output))
 
 def rename(inner, lmbd, rename_map):
@@ -41,15 +56,18 @@ def rename(inner, lmbd, rename_map):
     return ret
 
 
-def breduct(line,rename_map,start=0):
+def breduct(line,rename_map,start=0,parent_pre=""):
     rets = []
     i=len(line)
+
     while True:
         occ = line.find("\\",start)
         #### Cannot find lambda anymore
         if occ == -1:
             break
-
+    
+        pre = line[start:occ]
+        
         #### Finding lambda boundary to the corresponding function
         dot = line.find(".",occ)
         if dot == -1:
@@ -77,7 +95,7 @@ def breduct(line,rename_map,start=0):
 
 
         #### Go Depth to the child first!
-        inner = breduct(line[dot+1:i],rename_map)
+        inner = breduct(line[dot+1:i],rename_map,parent_pre=pre)
 
         if i != len(line):
             var_next = i+1
@@ -117,12 +135,15 @@ def breduct(line,rename_map,start=0):
                 inner = "".join(["\\"+x for x in rest]) + "." + inner
 
             start = var_next_bound + 2
+            if start < len(line) and line[start] == ',': 
+                inner += ')'
+                start += 1
             rets.append(filter(lambda x: x != '@', inner))
         else:
             # Case of lambda without variable
             start = len(line)
             rets += [inner]
-    return line[0:line.find("\\")] +','.join(rets) + line[i:] if rets != [] else line
+    return parent_pre +(','.join(rets) + line[i:] if rets != [] else line)
 
 G = { x:y for (x,y) in zip([n for n in range(1,27)],"ABCDEFGHIJKLMNOPQRSTUVWXYZ")}
 def change_x_to_var(l):

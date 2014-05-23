@@ -33,7 +33,7 @@ for n, sp_line in enumerate(sys.stdin):
         count += 1
     else:
         print n, "0"
-        line_count += 1
+    line_count += 1
 
 if line_count != len(gs_list):
     print >> sys.stderr, "Line count != reference %d != %d" % (line_count, len(gs_list)) 
