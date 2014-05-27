@@ -72,8 +72,8 @@ def main():
         lex_rule, _, finish, _, _ = lex_acq([], query_node, sent, [], args.void_span)
         if finish: f += 1
         
-        if not args.no_expand:
-            lex_rule = expand_rule(lex_rule)
+        #if not args.no_expand:
+        #    lex_rule = expand_rule(lex_rule)
         
         removed = set()
         #### Printing all results
@@ -81,7 +81,8 @@ def main():
             if args.verbose:
                 print index, sent_line
                 print_node(query_node,stream=sys.stdout)
-            for index, r in enumerate(lex_rule):
+            rule_strings = []
+            for r in lex_rule:
                 now_rule = r
                 if args.bare_rule:
                     label, arguments, bound, args_bound = bare_rule(r[2][0],r[2][1],r[3],r[4])
@@ -91,25 +92,26 @@ def main():
                 if args.three_sync:
                     rule_string = extract_three_sync(rule_string)
 
-                if rule_string != "" and arg_not_removed(now_rule, removed):
+                if rule_string != "": #and arg_not_removed(now_rule, removed):
                     if not check_valid_sync_symbol(rule_string):
                         print >> sys.stderr, "--- N O T  V A L I D ---"
                         print >> sys.stderr, rule_string
                         print >> sys.stderr, now_rule
                         print_rule(now_rule)
                         sys.exit(1)
-                    print rule_string
+                    rule_strings.append((rule_string,now_rule[5]))
                 else:
                     removed.add(now_rule[2][0])
+            rule_strings = compose_rule(rule_strings,args.max_compose_depth,sent_line.strip())
+            for rule_string in rule_strings:
+                print rule_string
             print >> rule_out_file, len(lex_rule)
         else:
             if args.verbose:
                 print index, ' is failed to parse.'    
             print >> rule_out_file, '0'
         if args.verbose: print '-------------------------------------'
-        
         count += 1
-    
     #### Closing all files
     map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file,rule_out_file])
 
@@ -123,6 +125,125 @@ def arg_not_removed(rule, rs):
                 return False
     return True
 
+def compose_rule(rules,max_depth,sent):
+    rmap = defaultdict(lambda:[])
+    rules_p = []
+    removed_set = set()
+    rule_set = set()
+    for rule, depth in rules:
+        src, trg = rule.split(" ||| ")
+        source, label = src.split(" @ ")
+        var_depth = [depth] * len([x for x in source.split() if len(x) > 1 and x[0]!= '"' and x[-1] != '"'])
+        rule_set.add(hash(rule))
+        rules_p.append([rule,depth, var_depth,True,depth,set([])])
+        
+    index = 0
+    while index != len(rules_p):
+        (rule, depth, var_depth, legal,rmaxdepth,fapplication) = rules_p[index]
+        src, trg = rule.split(" ||| ")
+        factors = trg.split(" |COL| ")
+        factors = map(lambda x: x.split(" @ ")[0],factors)
+        source, srclabel = src.split(" @ ")
+        rmap[depth, srclabel].append(([source]+factors,var_depth,rmaxdepth))
+        
+        if source == "":
+            rules_p[index][3] = False
+            removed_set.add((depth,srclabel))
+        
+        handicap = set()
+        nt_count = 0
+        for word in source.split(" "):
+            if len(word) > 1 and word[0] != '"' and word[-1] != '"':
+                nt_count += 1
+                x_var, label = word.split(":")
+                x_val = int(x_var[1:])
+                if (var_depth[x_val]+1,label) in removed_set:
+                    handicap.add((var_depth[x_val]+1,label))
+
+        application_set = set()
+        # for each non terminal in the source
+        for word_index, word in enumerate(source.split(" ")):
+            if len(word) > 1 and word[0] != '"' and word[-1] != '"':
+                x_var, label = word.split(":")
+                x_val = int(x_var[1:])
+                # there is a child with depth + 1 exists
+                for (subs,vdepth,mdepth) in rmap[var_depth[x_val]+1,label]:
+                    application_check = hash(' '.join(subs))
+                    if mdepth - depth <= max_depth and (application_check, depth, nt_count) not in application_set\
+                            and application_check not in fapplication:
+                        fapplication.add(application_check)
+                        #application_set.add((application_check,depth,nt_count))
+                        nvar_depth = copy.deepcopy(var_depth)
+                        del nvar_depth[x_val]
+                        offset = len(nvar_depth)
+                        resol, var_map = compose_resolution(subs,[source]+factors,x_val,offset)
+    
+                        for vd in enumerate(vdepth):
+                            nvar_depth.append(0)
+    
+                        for i,vd in enumerate(vdepth):
+                            nvar_depth[int(var_map["x"+str(i)])] = vd
+                        rule_str_in = resol[0] + " @ " + srclabel + " ||| " + (' |COL| '.join(resol[1:]))
+                        hash_val = hash(resol[0]+srclabel)
+                        if hash_val not in rule_set and syntax_correct(resol[0] if len(resol) == 2 else resol[1],sent):
+                            rule_set.add(hash_val)
+                            rule_legal = True
+                            for word_legal in resol[0].split(" "):
+                                if len(word_legal) > 1 and word_legal[0] != '"' and word_legal[-1] != '"':
+                                    word_legal_var, word_legal_label = word_legal.split(":")
+                                    depth_info = nvar_depth[int(word_legal_var[1:])]
+                                    if (depth_info+1, word_legal_label) in removed_set:
+                                        rule_legal = False
+                                        break
+    
+                            rules_p.insert(index+1,[rule_str_in,depth,nvar_depth,rule_legal,max(rmaxdepth,mdepth),copy.deepcopy(fapplication)]) 
+                        break
+        index += 1            
+         
+    return [rule_str for (rule_str,_,_,legal,_,_) in rules_p if legal]
+
+def syntax_correct(src, sent):
+    g = []
+    for word in src.split():
+        if word[0] == '"' and word[-1] == '"':
+            g.append(word[1:-1])
+        elif ' '.join(g) not in sent:
+            return False
+        else:
+            g = []
+    return ' '.join(g) in sent
+
+def compose_resolution(subs, targets,x_val,before):
+    if len(subs) != len(targets):
+        raise Exception("len Subs != len Target")
+    ret = []
+    var_map = {}
+    j = before
+    for sub, target in zip(subs,targets):
+        new_word = []
+        i = 0
+        for word in target.split(" "):
+            if len(word) > 1 and word[0] != '"' and word[-1] != '"':
+                x_var, label = word.split(":")
+                x_val_trg = int(x_var[1:])
+                if x_val_trg == x_val:
+                    for w in sub.split(" "):
+                        if len(w) > 1 and w[0] != '"' and w[-1] != '"':
+                            x_var_in, label_in = w.split(":")
+                            if x_var_in not in var_map:
+                                var_map[x_var_in] = str(j)
+                                j += 1
+                            new_word.append("x"+var_map[x_var_in]+":"+label_in)
+                        elif w != "":
+                            new_word.append(w)
+                else:
+                    new_word.append("x"+str(i) + ":" + label)
+                    i+=1
+            else:
+                new_word.append(word)
+        ret.append(" ".join(new_word))
+    return ret, var_map
+
 def print_rule(rule):
     (head, word, (label, arguments) , var_bound ,arg_bound ) = rule
     print >> sys.stderr, head, word, label, arg_bound
@@ -130,9 +251,10 @@ def print_rule(rule):
         print >> sys.stderr, arg, arg_b
 
 def expand_rule(initial_rule):
-    ret = []
+    ret_init = []
+    ret_expand = []
     for rule in initial_rule:
-        (head , word , ( label, arguments ) , var_bound , arg_bound) = rule
+        (head , word , ( label, arguments ) , var_bound , arg_bound, depth) = rule
         child_funcs = []
         for (index,_word) in enumerate(word):
             if _word < 0:
@@ -141,7 +263,7 @@ def expand_rule(initial_rule):
                     child_funcs.append((index,_word,arg))
         
         enum = [('{0:0'+str(len(child_funcs))+'b}').format(x) for x in range(1,(2**len(child_funcs)))]
-        ret.append(rule)
+        ret_init.append(rule)
         min_x = min(0,min([x for x in map((lambda y: y if type(y) == int and y < 0 else 0), rule[1])]))
         for binstring in enum:
             funcs = [child_funcs[index] for (index,x) in enumerate(binstring) if x == '1']
@@ -163,8 +285,11 @@ def expand_rule(initial_rule):
                     else:
                         rule_cpy[1].insert(w_index,word_)
 
-            ret.append(rule_cpy)
-    return ret
+            ret_expand.append(rule_cpy)
+    for r in ret_expand:
+        print r
+
+    return ret_init + ret_expand
 
 def bare_rule(label, args, bound, args_bound):
     if bound == []:
@@ -197,7 +322,7 @@ def format_args(args, delta):
             ret.append(k)
     return ret
 
-def lex_acq(rules, node, sent, parent_v, void_span, start=True):
+def lex_acq(rules, node, sent, parent_v, void_span, depth=0,start=True):
     child_spans = []
     w_i = sorted(list(node.eorigin))
     w_i_max = sorted(list(node.e))
@@ -205,7 +330,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
     var_bound = [];
     for i, child in enumerate(node.childs):
         if len(child.childs) != 0 and len(child.e) != 0:
-            _, span, _legal, var_bound, rule_number = lex_acq(rules, child, sent, [x for x in node.vorigin if x not in parent_v]+parent_v, void_span, start=False)
+            _, span, _legal, var_bound, rule_number = lex_acq(rules, child, sent, [x for x in node.vorigin if x not in parent_v]+parent_v, void_span, depth+1,start=False)
             legal = legal and _legal
             child_spans.append((i,span,var_bound,rule_number))
 
@@ -219,7 +344,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
             var_bound = list([var for var in node.vorigin if type(var) == int and var not in node.vmerged] + list(node.vmerged))
             node.extra_info = var_bound
             node.head = LEAF if not start and LEAF in TYPE_LABEL else QUERY if start else FORM
-            r = ( node.head, ( sent_map(w_i,sent) ), ( node.label, ([c.label for c in node.childs]) ) , var_bound, [[]] * len(node.childs))
+            r = ( node.head, ( sent_map(w_i,sent) ), ( node.label, ([c.label for c in node.childs]) ) , var_bound, [[]] * len(node.childs), depth)
             if len(node.v) == 0:
                 if node.childs[0].label not in r[2][1]: r[2][1].append(node.childs[0].label)
             rules.append( r )
@@ -256,7 +381,7 @@ def lex_acq(rules, node, sent, parent_v, void_span, start=True):
                         arguments[i] = child.label
 
                 node.head = assign_head(node.label) if not start else QUERY
-                r = (node.head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound)
+                r = (node.head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound, depth)
                 rules.append( r )   
     return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound, (len(rules)-1)
 
@@ -267,7 +392,7 @@ def assign_head(func_label):
    return ret 
 
 def trans_lambda_rule_to_string(r):
-    head, word, (label, arguments), var_bound, arg_bound = r
+    head, word, (label, arguments), var_bound, arg_bound,depth = r
 
     ret = ""
     index_map = {}
@@ -501,6 +626,7 @@ def parse_argument():
     parser.add_argument('--void_span', action="store_true",help="Give void span to unaligned words.")
     parser.add_argument('--bare_rule', action="store_true",help="print rule independently.")
     parser.add_argument('--no_expand', action="store_true",help="Do not permute all the merging.")
+    parser.add_argument('--max_compose_depth',type=int, default=0)
     return parser.parse_args()
 
 # 3 Synch Grammar
@@ -546,9 +672,10 @@ def extract_three_sync(rule):
         else:
             left.append(word)
 
-    if len(left) == 2 or loop(left) or unary_before(left):
+    if loop(left) or unary_before(left): #or len(left) == 2
         rule = ""
     else:
+        if len(left) == 2: left.insert(0,"")
         rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
     return rule
 
