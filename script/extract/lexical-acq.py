@@ -323,7 +323,7 @@ def change_not_and_conj(node):
 
 def transform_multi_words_entity(node):
     if type(node.label) == str and len(node.label) > 0 and node.label[0] == "'" and node.label[-1] == "'":
-        node.label = "_".join(node.label[1:-1].split())
+        node.label = "#$#".join(node.label.split())
     for (i,child) in enumerate(node.childs):
         node.childs[i] = transform_multi_words_entity(child)
     return node
