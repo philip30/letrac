@@ -16,6 +16,7 @@ class Node:
 
 class SearchNode:
     def __init__(self, node):
+        self.id = 0
         self.label = node.label
         self.childs = node.childs
         self.type = node.type
@@ -23,11 +24,31 @@ class SearchNode:
         self.vorigin = []
         self.e = set()
         self.eorigin = set()
-        self.vmerged = []
-        self.extra_info = None
-        self.leaf= False
+        self.bound = []
+        self.height = 0
+        self.complement = set()
+        self.frontier = set()
+        self.voriginfo = {}
+        self.childsize = 0
         self.head = ""
 
+    def __str__(self):
+        k = "ID: " +str(self.id) + "\n"
+        k += "\tHead: "+self.head + "\n"
+        k += "\tLabel: "+str(self.label) +"\n"
+        k += "\tType: "+self.type + "\n" 
+        k += "\tvorig: "+str(self.vorigin) + "\n"
+        k += "\tv: "+ str(self.v) + "\n"
+        k += "\teorig: "+str(self.eorigin) + "\n"
+        k += "\te: "+ str(self.e) + "\n"
+        k += "\theight: "+str(self.height) + "\n"
+        k += "\tbound: "+str(self.bound) + "\n"
+        k += "\tcomplement: "+str(self.complement) + "\n"
+        k += "\tfrontier: "+str(self.frontier) + "\n"
+        k += "\tchildsize: "+str(self.childsize) + "\n"
+        k += "\tvoriginfo: "+str(self.voriginfo) + "\n"
+        return k
+        
 def extract(line,position=0,parent=""):
     childs = []
     offset = position
@@ -66,11 +87,11 @@ def change_var_to_x(node,var_map):
 def print_node(n,indent=0,stream=sys.stderr):
     n_child = len(n.childs)
     for i in range (n_child/2):
-        print_node(n.childs[i],indent+10,stream)
-    content = (" " * indent) + "[" + str(n.label) + "]"
+        print_node(n.childs[i],indent+20,stream)
+    content = (" " * indent) + "[" + str(n.label) + (str(n.eorigin) if type(n) == SearchNode else "") + "]"
     print >> stream, content
     for i in range (n_child/2,n_child):
-        print_node(n.childs[i],indent+10,stream)
+        print_node(n.childs[i],indent+20,stream)
 
 def query_representation(node,map,input_generator=False,root=True):
     ret = map[node.label] if type(node.label) == int else node.label
@@ -85,9 +106,9 @@ def query_representation(node,map,input_generator=False,root=True):
     return ret
 
 # rule = (Type, Label, child)
-def transform_into_rule(rules,node,start=False,recurse=True):
+def transform_into_rule(rules,node,start=False,recurse=True,depth=0):
     if node.label != "":
-        rule = (QUERY if start else FORM, node.label, [])
+        rule = (QUERY if start else FORM, node.label, [],depth, node.id)
         for child in node.childs:
             if len(child.childs) == 0:
                 rule[2].append(child.label)
@@ -102,13 +123,12 @@ def transform_into_rule(rules,node,start=False,recurse=True):
 
     if recurse:
         for child in node.childs:
-            if len (child.childs) != 0:
-                transform_into_rule(rules,child)
+            if len (child.childs) != 0 or (type(child.label) == str and child.label != "_"):
+                transform_into_rule(rules,child,depth=depth+1)
     return rules
 
-def str_logical_rule(rule):
-    return rule[0] + "->" + str(rule[1]) + "(" + ",".join(map(lambda x: ("x" \
-            + str(x) if type(x) == int else x.replace(' ','_') if type(x) == str else ("(" + ",".join(x)+ ")")),rule[2])) + ")"
+def str_logical_rule(label,depth):
+    return label.replace("'",'').replace(" ","_")+str(depth)
 
 # Return the MST according to kruskal algorithm
 def kruskal(vertices,edges):

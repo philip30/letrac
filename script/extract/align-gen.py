@@ -13,9 +13,13 @@ from geometric import str_logical_rule
 from geometric import QUERY
 from geometric import FORM
 from geometric import query_representation
+from geometric import SearchNode
 
 many_literals = []
 words = set()
+
+
+manual_align = {"in":"loc", "me":"answer","the":"answer", "can":"answer", "you":"answer", "tell":"answer", "is":"answer", "name":"answer", "cities": "city", "rivers":"river"}
 
 def main():
     parser = argparse.ArgumentParser(description="Run Geoparse Alignment Input Generator")
@@ -51,6 +55,7 @@ def main():
 
         #### logical rule extraction
         var_map = defaultdict(lambda: len(var_map)+1)
+        query_node = construct_query_node(query_node,[])
         query_node = change_var_to_x(query_node,var_map)
         rules = transform_into_rule([],query_node,start=True)
 
@@ -58,7 +63,7 @@ def main():
         out_sent.write(" ".join(sentence) + "\n")
         out_sent_g.write(" ".join(sentence) + "\n")
 
-        (logical_rule, logical_rule_giza) = ([str_logical_rule(rule) for rule in rules], [str_giza_in_rule(rule) for rule in rules])
+        (logical_rule, logical_rule_giza) = ([str_logical_rule(rule[1],rule[4]) for rule in rules], [str_giza_in_rule(rule) for rule in rules])
         if (len(logical_rule) != len(logical_rule_giza)):
             print >> sys.stderr, "Rule size doesn't match", logical_rule_giza, logical_rule
 
@@ -69,7 +74,7 @@ def main():
         if args.output:
             out.write(" ".join(sentence) + "\n")
             for rule in rules:
-                out.write(str_logical_rule(rule) + " ||| " + str_giza_in_rule(rule)+ "\n")
+                out.write(str_logical_rule(rule[1],rule[4]) + " ||| " + str_giza_in_rule(rule)+ "\n")
             out.write("------------------------------------\n") 
         linecount += 1
 
@@ -82,10 +87,16 @@ def main():
 
     #### ADDITIONAL information for alignment
     #### Every word is aligned to itself
-    for word in sorted(words):
-        out_sent_g.write(word + "\n")
-        out_log_g.write(word + "\n")
-        out_w.write(word +"\n")
+    for i in range(0,10):
+        for word in sorted(words):
+            out_sent_g.write(word + "\n")
+            out_log_g.write(word + "\n")
+            out_w.write(word +"\n")
+        
+        for word1, word2 in manual_align.items():
+            out_sent_g.write(word1 + "\n")
+            out_log_g.write(word2 + "\n")
+            out_w.write(word1 + "\n")
 
     #### Handle something like 'south dakota' so add alignment south -> south_dakota and dakota -> south_dakota
     for literals in many_literals:
@@ -100,13 +111,22 @@ def main():
     print >> sys.stderr, "Successfully extracting :",  linecount, "pair(s)."
 
 def str_giza_in_rule(rule):
-    if len(rule[2]) >= 1 and type(rule[2][0]) != int and rule[2][0] != QUERY and rule[2][0] != FORM:
-        if ' ' in rule[2][0]:
-            many_literals.append(rule[2][0][1:-1])
-        return rule[2][0].replace(' ', '_').replace("'",'')
+    if len(rule[2]) == 0:
+        if ' ' in rule[1]:
+            many_literals.append(rule[1][1:-1])
+        return rule[1].replace(' ', '_').replace("'",'')
     else:
         return rule[1]
 
+def construct_query_node(query_node,id,parent=None):
+    query_node = SearchNode(query_node)
+    query_node.height = 0 if parent == None else parent.height + 1
+    query_node.id = len(id)
+    id.append(query_node)
+    for i, child in enumerate(query_node.childs):
+        query_node.childs[i] = construct_query_node(child,id,query_node)
+        query_node.childsize += 1
+    return query_node
 
 
 # ============== MAIN ======================

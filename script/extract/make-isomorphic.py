@@ -40,10 +40,11 @@ def main():
 
         # adding v, e
         var_map = defaultdict(lambda:len(var_map)+1)
+        query_node = construct_query_node(query_node)
         query_node = change_var_to_x(query_node,var_map) # alter A->x1, B->x2, and so on
-        query_node = calculate_v(query_node)             # v is set of logical variables x1,x2.. appearing in that node
-        query_node = calculate_e(query_node, s2l)        # e is set of which words this node alligned to
-        query_node = make_isomorphic(query_node,sent)    # make it ismorphic
+        #query_node = calculate_v(query_node)             # v is set of logical variables x1,x2.. appearing in that node
+        #query_node = calculate_e(query_node, s2l)        # e is set of which words this node alligned to
+        #query_node = make_isomorphic(query_node,sent)    # make it ismorphic
 
         ##### Debug
         # print_node (query,stream=sys.stdout)
@@ -58,9 +59,15 @@ def main():
     # close all file
     map(lambda x:x.close(), [inp_file, sent_file, fol_file, align_file, out_file])
 
+def construct_query_node(query_node,parent=None):
+    query_node = SearchNode(query_node)
+    query_node.height = 0 if parent == None else parent.height + 1
+    for i, child in enumerate(query_node.childs):
+        query_node.childs[i] = construct_query_node(child,query_node)
+    return query_node
+
+
 def calculate_v(node):
-    if not isinstance(node, SearchNode):
-        node = SearchNode(node)
     if type(node.label) == int:
         if node.label not in node.v: node.v.append(node.label)
         if node.label not in node.vorigin: node.vorigin.append(node.label)
@@ -74,12 +81,9 @@ def calculate_v(node):
     return node
 
 def calculate_e(node, logic_map):
-    if not isinstance(node,SearchNode):
-        node = SearchNode(node)
-    rule = transform_into_rule([],node,recurse=False,start=node.label=='answer') if len(node.childs) != 0 else []
-    if len(rule) > 0:
-        node.e = set([i for i in logic_map[str_logical_rule(rule[0])]])
-        node.eorigin = set([i for i in logic_map[str_logical_rule(rule[0])]])
+    if type(node.label) != int:
+        node.e = set([i for i in logic_map[str_logical_rule(node.label,node.height)]])
+        node.eorigin = set([i for i in logic_map[str_logical_rule(node.label,node.height)]])
 
     for (i,child) in enumerate(node.childs):
         node.childs[i] = calculate_e(child, logic_map)

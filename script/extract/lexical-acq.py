@@ -37,7 +37,6 @@ def main():
 
     #### counter
     count = 0
-    f = 0
 
     #### For input-sentence-fol-alignment
     for (index,(inp_line,sent_line, fol_line, align_line)) in enumerate(zip(inp_file,sent_file,fol_file,align_file)):
@@ -58,444 +57,165 @@ def main():
 
         #### Doing some node annotation, and bound node to which word and variable it is aligned to.
         var_map = defaultdict(lambda:len(var_map)+1)
+        aligned_word = set()
+        query_node = construct_query_node(query_node,[])
         query_node = change_var_to_x(query_node,var_map) # alter A->x1, B->x2, and so on
         query_node = calculate_v(query_node)             # give information about variables that bound to node
-        query_node = calculate_e(query_node,s2l)         # give information about which words that are aligned to node
+        query_node = calculate_e(query_node,s2l,aligned_word)         # give information about which words that are aligned to node
+        query_node,_ = align_unaligned_source(query_node,0,len(sent)-1,aligned_word)
         query_node = change_not_and_conj(query_node)     # change '' to CONJUNCTION and \+ to NEGATION
         query_node = transform_multi_words_entity(query_node) # change 'w1 w2' entity into w1_w2
+        query_node = prune_node(query_node)
+        query_node = calculate_bound(query_node)
+        query_node = assign_head(query_node)
+        query_node = mark_frontier_node(query_node,set())
 
-        #### Merge Unary Node (We will not have the node such FORM->FORM)
-        if args.merge_unary: 
-            query_node,_ = merge_unary(query_node)
-
-        #### Extracting! finish indicates that extraction is performed until root
-        lex_rule, _, finish, _, _ = lex_acq([], query_node, sent, [], args.void_span)
-        if finish: f += 1
-        
-        #if not args.no_expand:
-        #    lex_rule = expand_rule(lex_rule)
-        
-        removed = set()
-        #### Printing all results
-        if finish or args.include_fail:
-            if args.verbose:
-                print index, sent_line
-                print_node(query_node,stream=sys.stdout)
-            rule_strings = []
-            for r in lex_rule:
-                now_rule = r
-                if args.bare_rule:
-                    label, arguments, bound, args_bound = bare_rule(r[2][0],r[2][1],r[3],r[4])
-                    now_rule = (r[0],r[1],(label,arguments),bound,args_bound)
-                #print now_rule
-                rule_string = trans_lambda_rule_to_string(now_rule)
-                if args.three_sync:
-                    rule_string = extract_three_sync(rule_string)
-
-                if rule_string != "": #and arg_not_removed(now_rule, removed):
-                    if not check_valid_sync_symbol(rule_string):
-                        print >> sys.stderr, "--- N O T  V A L I D ---"
-                        print >> sys.stderr, rule_string
-                        print >> sys.stderr, now_rule
-                        print_rule(now_rule)
-                        sys.exit(1)
-                    rule_strings.append((rule_string,now_rule[5]))
-                else:
-                    removed.add(now_rule[2][0])
-            rule_strings = compose_rule(rule_strings,args.max_compose_depth,sent_line.strip())
-            for rule_string in rule_strings:
-                print rule_string
-            print >> rule_out_file, len(lex_rule)
-        else:
-            if args.verbose:
-                print index, ' is failed to parse.'    
-            print >> rule_out_file, '0'
-        if args.verbose: print '-------------------------------------'
+        rules = lexical_acq(query_node,sent,[],args.merge_unary)
         count += 1
+        if (args.verbose):
+            print index, "|||",  sent_line.strip()
+            print_node(query_node,stream=sys.stdout) 
+            print_node_list(query_node)
+        
+        for rule in rules:
+            print rule
+        if (args.verbose):print '----------------------------------------------------------------------------'
     #### Closing all files
     map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file,rule_out_file])
 
     #### Printing stats
-    print >> sys.stderr, "Finish extracting rule from %d pairs with %.3f of them parsed successfully." % (count, float(f)/count)  
+    print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
 
-def arg_not_removed(rule, rs):
-    for word in rule[1]:
-        if type(word) == int and word < 0:
-            if rule[2][1][-word-1][5] in rs:
-                return False
-    return True
+def align_unaligned_source(node, start, end, aligned_word):
+    child_spans = set(node.eorigin)
+    for child in node.childs:
+        span = child.e
+        if len(span) != 0:
+            for w in range(span[0], span[-1]+1):
+                child_spans.add(w)
+    unaligned = [x for x in range(start,end+1) if x not in child_spans and x not in aligned_word]
+    for w in unaligned:
+        node.eorigin.append(w)
+    for child in node.childs:
+        if len(child.e) != 0:
+            span = list(child.e)
+            _, unaligned_child = align_unaligned_source(child, span[0], span[-1],aligned_word)
+            for e in unaligned_child:
+                unaligned.append(e)
+    for w in unaligned:
+        node.e.append(w)
+    node.eorigin = sorted(node.eorigin)
+    node.e = sorted(node.e)
+    return (node, unaligned)
 
-def compose_rule(rules,max_depth,sent):
-    rmap = defaultdict(lambda:[])
-    rules_p = []
-    removed_set = set()
-    rule_set = set()
-    for rule, depth in rules:
-        src, trg = rule.split(" ||| ")
-        source, label = src.split(" @ ")
-        var_depth = [depth] * len([x for x in source.split() if len(x) > 1 and x[0]!= '"' and x[-1] != '"'])
-        rule_set.add(hash(rule))
-        rules_p.append([rule,depth, var_depth,True,depth,set([])])
-        
-    index = 0
-    while index != len(rules_p):
-        (rule, depth, var_depth, legal,rmaxdepth,fapplication) = rules_p[index]
-        src, trg = rule.split(" ||| ")
-        factors = trg.split(" |COL| ")
-        factors = map(lambda x: x.split(" @ ")[0],factors)
-        source, srclabel = src.split(" @ ")
-        rmap[depth, srclabel].append(([source]+factors,var_depth,rmaxdepth))
-        
-        if source == "":
-            rules_p[index][3] = False
-            removed_set.add((depth,srclabel))
-        
-        handicap = set()
-        nt_count = 0
-        for word in source.split(" "):
-            if len(word) > 1 and word[0] != '"' and word[-1] != '"':
-                nt_count += 1
-                x_var, label = word.split(":")
-                x_val = int(x_var[1:])
-                if (var_depth[x_val]+1,label) in removed_set:
-                    handicap.add((var_depth[x_val]+1,label))
+def lexical_acq(node,sent,rules,merge_unary=False):
+    if node.frontier:
+        sentence, (logic,_) = extract_node(node,sent,{},merge_unary)
+        logic = merge_logic_output(logic)
+        rules.append(sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound))
+    for child in node.childs:
+        lexical_acq(child,sent,rules,merge_unary)
+    return rules
 
-        application_set = set()
-        # for each non terminal in the source
-        for word_index, word in enumerate(source.split(" ")):
-            if len(word) > 1 and word[0] != '"' and word[-1] != '"':
-                x_var, label = word.split(":")
-                x_val = int(x_var[1:])
-                # there is a child with depth + 1 exists
-                for (subs,vdepth,mdepth) in rmap[var_depth[x_val]+1,label]:
-                    application_check = hash(' '.join(subs))
-                    if mdepth - depth <= max_depth and (application_check, depth, nt_count) not in application_set\
-                            and application_check not in fapplication:
-                        fapplication.add(application_check)
-                        #application_set.add((application_check,depth,nt_count))
-                        nvar_depth = copy.deepcopy(var_depth)
-                        del nvar_depth[x_val]
-                        offset = len(nvar_depth)
-                        resol, var_map = compose_resolution(subs,[source]+factors,x_val,offset)
+def extract_node(node,sent,var_map,merge_unary,start=True):
+    # extracting sent side
+    span = []
+    sent_list = []
+    logic_list = []
+    for word in node.eorigin:
+        span.append((word,word,sent[word]))
+    for child in node.childs:
+        # There is a word aligned to this subtree
+        aligned = child.e
+        if len(aligned) > 0:
+            span.append((aligned[0],aligned[-1],child))
     
-                        for vd in enumerate(vdepth):
-                            nvar_depth.append(0)
+    sorted(span,key=lambda x:x[0]) # sort the key including the first prefix to come.
+    for s in span:
+        if type(s[2]) == str:
+            sent_list.append((s[0],s[1],'"'+s[2]+'"'))
+        elif s[2].frontier and not (merge_unary and is_unary(node,s[2])):
+            number = len(var_map)
+            nt = non_terminal(number,s[2].head,s[2].bound)
+            sent_list.append((s[0],s[1],nt))
+            logic_list.append((nt,s[2].bound))
+            var_map[s[2].id] = number
+        else: # depth recursion to this node, extraction continued rooted at this node
+            s[2].frontier = False
+            sent_child, logic_child = extract_node(s[2],sent,var_map,merge_unary,start=False)
+            for s in sent_child: sent_list.append(s)
+            logic_list.append(logic_child)
     
-                        for i,vd in enumerate(vdepth):
-                            nvar_depth[int(var_map["x"+str(i)])] = vd
-                        rule_str_in = resol[0] + " @ " + srclabel + " ||| " + (' |COL| '.join(resol[1:]))
-                        hash_val = hash(resol[0]+srclabel)
-                        if hash_val not in rule_set and syntax_correct(resol[0] if len(resol) == 2 else resol[1],sent):
-                            rule_set.add(hash_val)
-                            rule_legal = True
-                            for word_legal in resol[0].split(" "):
-                                if len(word_legal) > 1 and word_legal[0] != '"' and word_legal[-1] != '"':
-                                    word_legal_var, word_legal_label = word_legal.split(":")
-                                    depth_info = nvar_depth[int(word_legal_var[1:])]
-                                    if (depth_info+1, word_legal_label) in removed_set:
-                                        rule_legal = False
-                                        break
-    
-                            rules_p.insert(index+1,[rule_str_in,depth,nvar_depth,rule_legal,max(rmaxdepth,mdepth),copy.deepcopy(fapplication)]) 
-                        break
-        index += 1            
-         
-    return [rule_str for (rule_str,_,_,legal,_,_) in rules_p if legal]
+    # orig info insertion
+    for vor in node.vorigin:
+        logic_list.insert(node.voriginfo[vor],vor)
 
-def syntax_correct(src, sent):
-    g = []
-    for word in src.split():
-        if word[0] == '"' and word[-1] == '"':
-            g.append(word[1:-1])
-        elif ' '.join(g) not in sent:
-            return False
-        else:
-            g = []
-    return ' '.join(g) in sent
-
-def compose_resolution(subs, targets,x_val,before):
-    if len(subs) != len(targets):
-        raise Exception("len Subs != len Target")
-    ret = []
-    var_map = {}
-    j = before
-    for sub, target in zip(subs,targets):
-        new_word = []
-        i = 0
-        for word in target.split(" "):
-            if len(word) > 1 and word[0] != '"' and word[-1] != '"':
-                x_var, label = word.split(":")
-                x_val_trg = int(x_var[1:])
-                if x_val_trg == x_val:
-                    for w in sub.split(" "):
-                        if len(w) > 1 and w[0] != '"' and w[-1] != '"':
-                            x_var_in, label_in = w.split(":")
-                            if x_var_in not in var_map:
-                                var_map[x_var_in] = str(j)
-                                j += 1
-                            new_word.append("x"+var_map[x_var_in]+":"+label_in)
-                        elif w != "":
-                            new_word.append(w)
-                else:
-                    new_word.append("x"+str(i) + ":" + label)
-                    i+=1
+    # Logic string
+    logic = '%s "%s' % (bound_to_lambda(node.bound),select_label(node.label))
+    if len(logic_list) != 0:
+        logic += '(" '
+        for i, item in enumerate(logic_list):
+            if type(item) == int:
+                logic += '"x' + str(item) + (',' if i < len(logic_list)-1 else "") + '"'
             else:
-                new_word.append(word)
-        ret.append(" ".join(new_word))
-    return ret, var_map
+                log, log_bound = item
+                logic += '%s %s %s' % (log, bound_to_string(log_bound), ("\",\"" if i < len(logic_list)-1 else ""))
+            logic += " " if len(logic) > 0 and logic[-1] != " " else ""
+        logic += '")'
+    logic += '"'
+    return (sent_list if not start else (' '.join([x[2] for x in sorted(sent_list,key=lambda x:x[0])])),\
+            (logic,node.bound))
 
-def print_rule(rule):
-    (head, word, (label, arguments) , var_bound ,arg_bound ) = rule
-    print >> sys.stderr, head, word, label, arg_bound
-    for (arg, arg_b) in zip (arguments, arg_bound):
-        print >> sys.stderr, arg, arg_b
-
-def expand_rule(initial_rule):
-    ret_init = []
-    ret_expand = []
-    for rule in initial_rule:
-        (head , word , ( label, arguments ) , var_bound , arg_bound, depth) = rule
-        child_funcs = []
-        for (index,_word) in enumerate(word):
-            if _word < 0:
-                arg = arguments[-_word-1]
-                if type(arg) == tuple:
-                    child_funcs.append((index,_word,arg))
-        
-        enum = [('{0:0'+str(len(child_funcs))+'b}').format(x) for x in range(1,(2**len(child_funcs)))]
-        ret_init.append(rule)
-        min_x = min(0,min([x for x in map((lambda y: y if type(y) == int and y < 0 else 0), rule[1])]))
-        for binstring in enum:
-            funcs = [child_funcs[index] for (index,x) in enumerate(binstring) if x == '1']
-            rule_cpy = copy.deepcopy(rule)
-            for func in reversed(funcs):
-                (w_index, _word, (arg_index,_,_,_,_,_)) = func
-                rule_cpy[1].pop(w_index)
-                offset = len(rule_cpy[2][1])
-                g = offset
-                for word_ in reversed(initial_rule[arg_index][1]):
-                    if type(word_) == int and word_ < 0:
-                        last = word_
-                        g+=1
-                        rule_cpy[1].insert(w_index,-g)
-                        rule_cpy[2][1][-_word-1][2].append(initial_rule[arg_index][2][1][-word_-1])
-                        rule_next = initial_rule[arg_index][2][1][-word_-1]
-                        rule_cpy[2][1].insert(offset,(-1,rule_next[1],rule_next[2],rule_next[3],rule_next[4],rule_next[5]))
-                        rule_cpy[4].insert(offset,initial_rule[arg_index][4][-word_-1])
-                    else:
-                        rule_cpy[1].insert(w_index,word_)
-
-            ret_expand.append(rule_cpy)
-    for r in ret_expand:
-        print r
-
-    return ret_init + ret_expand
-
-def bare_rule(label, args, bound, args_bound):
-    if bound == []:
-        if len(args_bound) == 1 and args_bound[0] != []:
-            delta = min(map(lambda x:x-1,args_bound[0]))
-            return format_label(label,delta), format_args(args,delta), bound,[map(lambda x:x-delta, args_bound[0])]     
+def merge_logic_output(logic):
+    words = logic.split()
+    i = 0
+    while i < len(words)-1:
+        g1 = words.pop(i)
+        if g1[0] == '"':
+            g2 = words.pop(i)
+            if g2[0] != '"':
+                # do extraction
+                words.insert(i,g2)
+                words.insert(i,g1)
+                i+=1
+            else:
+                merge = g1[:-1] + g2[1:]
+                words.insert(i,merge)
         else:
-            return label, args, bound, args_bound
-    else:
-        delta = min(map(lambda x:x-1, bound))
-        bound = map(lambda x: x-delta,bound)
-        args_bound = map(lambda x: map(lambda y: y-delta, x), args_bound)
-        return format_label(label,delta), format_args(args,delta), bound, args_bound
+            words.insert(i,g1)
+            i+= 1
+    return ' '.join(words)
 
-def format_label(label, delta):
-    if delta <= 0: return label
-    scan = 0
-    find = label.find("x")
-    if find != -1:
-        value = int(label[find+2]) - delta
-        return label[0:find] + "x" + str(value)+label[find+3:]
-    return label
+def is_unary(parent, node):
+    return parent.head == node.head and len(parent.childs) == 1
 
-def format_args(args, delta):
-    ret = []
-    for k in args:
-        if type(k) == int:
-            ret.append(k-delta)
-        else:
-            ret.append(k)
-    return ret
+def bound_to_lambda(bound):
+    return ("\"" + "".join(["\\x" + str(x) for x in reversed(bound)])+".\"" if len(bound) > 0 else "")
 
-def lex_acq(rules, node, sent, parent_v, void_span, depth=0,start=True):
-    child_spans = []
-    w_i = sorted(list(node.eorigin))
-    w_i_max = sorted(list(node.e))
-    legal = True
-    var_bound = [];
+def bound_to_string(bound):
+    return ("\"(" + ",".join(["x" + str(x) for x in bound]) + ")\"") if len(bound) > 0 else ""
+
+def mark_frontier_node(node, complement_span):
+    node.complement = complement_span
     for i, child in enumerate(node.childs):
-        if len(child.childs) != 0 and len(child.e) != 0:
-            _, span, _legal, var_bound, rule_number = lex_acq(rules, child, sent, [x for x in node.vorigin if x not in parent_v]+parent_v, void_span, depth+1,start=False)
-            legal = legal and _legal
-            child_spans.append((i,span,var_bound,rule_number))
-
-    if legal:
-        is_leaf = len(child_spans) == 0
-        node.leaf = is_leaf
-        child_spans = sorted(list(child_spans)+[(-1,(x,x),[],-1) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
-        # analyze rule
-        rule = transform_into_rule([],node,start,recurse=False)
-        if (len(rule) > 0) and is_leaf:
-            var_bound = list([var for var in node.vorigin if type(var) == int and var not in node.vmerged] + list(node.vmerged))
-            node.extra_info = var_bound
-            node.head = LEAF if not start and LEAF in TYPE_LABEL else QUERY if start else FORM
-            r = ( node.head, ( sent_map(w_i,sent) ), ( node.label, ([c.label for c in node.childs]) ) , var_bound, [[]] * len(node.childs), depth)
-            if len(node.v) == 0:
-                if node.childs[0].label not in r[2][1]: r[2][1].append(node.childs[0].label)
-            rules.append( r )
-        else:
-            previous = -1
-            word = []
-            var_bound = [] if start else [x for x in node.v if x in parent_v]
-            node.extra_info = var_bound
-            arg_bound = [[]] * len(node.childs)
-            arguments = [[]] * len(node.childs)
-            for index, child_span, child_bound,rule_number in child_spans:
-                if child_span[0] < previous:
-                    var_bound = []
-                    legal = False
-                    break
-                elif previous != -1:
-                    if void_span:
-                        s_range = child_span[0]-previous-1
-                        if s_range > 0: word.append(s_range)
-                    else:
-                        for k in range(previous+1,child_span[0]):
-                            word.append(sent[k])
-                previous = child_span[1]
-                if index == -1:
-                    word.append(sent[child_span[0]])
-                else:
-                    word.append(-index-1)
-                    arg_bound[index]=child_bound
-                    arg_leaf_info = [gc.label for gc in node.childs[index].childs] if node.childs[index].leaf else []
-                    arguments[index]=(rule_number, node.childs[index].head,arg_leaf_info,node.childs[index].vorigin,node.childs[index].extra_info, node.childs[index].label)
-            else:
-                for i, child in enumerate(node.childs):
-                    if child.label in node.vorigin and len(child.childs) == 0:
-                        arguments[i] = child.label
-
-                node.head = assign_head(node.label) if not start else QUERY
-                r = (node.head , word , ( select_label(node.label), arguments ) , var_bound , arg_bound, depth)
-                rules.append( r )   
-    return rules, (w_i_max[0],w_i_max[-1]), legal, var_bound, (len(rules)-1)
-
-
-def assign_head(func_label):
-   ret = func_label if func_label in TYPE_LABEL else FORM
-   if func_label == 'count' and COUNT in TYPE_LABEL: ret = COUNT
-   return ret 
-
-def trans_lambda_rule_to_string(r):
-    head, word, (label, arguments), var_bound, arg_bound,depth = r
-
-    ret = ""
-    index_map = {}
-    inner_arg_map = {}
-    for w in word:
-        if type(w) == int:
-            if w < 0:
-                key = len(index_map)+1
-                (arg_type,arg_head,inner,vorig,bound,label_) = arguments[-w-1]
-                ret += "x" + str(key-1) +":" \
-                    +(arg_head) \
-                    + append_var_info(arg_bound[-w-1])
-                index_map[-w-1] = str(key)
-                if arg_type == -1:
-                    inner_arg_map[str(arg_head)+str(label_)+str(inner)+str(vorig)+str(bound)] = key
-            else:
-                ret += "\"(" + str(w) + ")\""
-        else:
-            ret += '"' + w + '"'
-        ret += " "
-   
-    ret += "@ " + head + append_var_info(var_bound)
-    logic = '"'
-    logic += "".join(["\\x" + str(x) for x in reversed(var_bound)])
-    if len(var_bound) > 0: logic += "."
-    logic += select_label(label) + "("
-    args = []
-    nt_last = True
-
-    for index in range (0,len(arguments)):
-        arg = arguments[index]
-        if arg != []:
-            if (type(arg) == tuple or type(arg) == list) and arg[0] == -1:
-                break
-            if index > 0:
-                logic += ","
-
-            if type(arg) == tuple or type(arg) == list:
-                logic +="\" "
-            occ = (type(arg) == tuple or type(arg) == list) and (-index-1 not in word)
-            _arg, nt_last = trans_arg_to_string(index_map,index,arg,arg_bound[index],occ,index == rindex_nempty(list(arguments)),inner_arg_map)
-            logic += _arg
-
-    if not nt_last: logic += " \""
-    logic += ")" * (1 + len([x for x in label if x == '(']))
-    logic += "\""
-    logic+=  " @ " + head + append_var_info(var_bound)
-    return ret + " ||| " + ammeliorate_error(logic)
-
-def ammeliorate_error(logic):
-    return logic.replace(' " ', ' ') 
-
-def trans_arg_to_string(index_map,position,arg,bound,occ,last,inner_arg_map):
-    ret = ""
-    has_args = True
-    if type(arg) == int:
-        ret = "x" + str(arg)
-    elif type(arg) == str:
-        if '_' in arg and len(arg) != 1:
-            arg = "'" + select_label(arg) + "'"
-            arg = arg.replace('_','#$#')
-        ret = arg
-    elif type(arg) == tuple or type(arg) == list:
-        (_, arg_head, arg_inner, v_orig, arg_bound, arg_label) = arg
-        if position in index_map or all(type(x) == int for x in arg_inner) or len(arg_inner) == 0:
-            ret = "x" + str(int(index_map[position])-1) +":"+ arg_head \
-                + append_var_info(bound) if not occ else \
-                "\"%s.%s(%s)\"" % (''.join(["\\x"+str(i) for i in reversed(bound)]),select_label(arg_label),','.join(["x"+str(i) for i in bound]))
-            has_args = len(bound) != 0
-            if has_args:
-                ret += " \"("
-                inner_arg = []
-                for i_arg in bound:
-                    inner_arg.append("x"+str(i_arg))
-                ret += ",".join(inner_arg)
-                ret += ")"
-            elif not last:
-                ret += " \""
-        else:
-            ret += '"'
-            if len(bound) != 0:
-                ret += ''.join(["\\x"+str(i) for i in reversed(bound)])
-                ret += '.'
-           
-            arg_inn_ =["x" + str(i) for i in v_orig]
-            nt_last = True
-            for (index,arg_inn) in enumerate(arg_inner):
-                if type(arg_inn) == str:
-                    nt_last = False
-                    if '_' in arg_inn and len(arg_inn) != 1:
-                        arg_inn = "'" + arg_inn + "'"
-                        arg_inn = arg_inn.replace('_','#$#')
-                    arg_inn_.append(arg_inn)
-                elif type(arg_inn) == tuple or type(arg_inn) == list:
-                    nt_last = True
-                    var_label = arg_inn[1]
-                    lambda_var = ("(" + ','.join(['x' + str(i) for i in reversed(arg_inn[4])]) + ")") if len(arg_inn[4]) != 0 else ""
-                    arg_inn_.append('" x%d:%s%s "%s' % (inner_arg_map[str(arg_inn[1])+str(arg_inn[5])+str(arg_inn[2])+str(arg_inn[3])+str(arg_inn[4])]-1,var_label,append_var_info(arg_inn[4]),lambda_var))
-            has_args = nt_last
-            arg_inn_ = ','.join(arg_inn_)
-            ret += select_label(arg_label) + "("  + arg_inn_ + ")"+ (("(" + ','.join(map(lambda x: "x"+str(x),bound)) +")") if len(bound) != 0 else "") + '"'
-            if not last: ret += " \""
-    return ret, has_args
+        # calculate the complement span for this child 
+        # first this child inherit the parent complement span
+        complement_s = set([x for x in complement_span])
+        # include the word in this node
+        for w in node.eorigin:
+            complement_s.add(w)
+        # Then include every span of the sibling 
+        for j, sibling in enumerate(node.childs):
+            if i != j: # means the sibling is not the node itself 
+                for v in sibling.e:
+                    complement_s.add(v)
+        # recursively mark frontier node for the child
+        mark_frontier_node(child, sorted(complement_s))
+    # Thus we consistently add the definition of the frontier node
+    # is a node where every of its complement span is not in the span.
+    span = node.e
+    node.frontier = (not len(span) == 0) and (not any(e >= span[0] and e <= span[-1] for e in node.complement))
+    return node
 
 def sent_map(span,sent):
     ret = []
@@ -516,35 +236,80 @@ def sent_map(span,sent):
             ret.append(sent[s_begin])
     return ret
 
-def span_overlap(s1,s2):
-    return (s1[0] < s2[0] and s1[0] < s2[1] and s1[1] < s2[1]) or (s2[0] < s1[0] and s1[0] < s2[1] and s2[1] < s1[1])
+def construct_query_node(query_node,id,parent=None):
+    query_node = SearchNode(query_node)
+    query_node.height = 0 if parent == None else parent.height + 1
+    query_node.id = len(id)
+    id.append(query_node)
+    for i, child in enumerate(query_node.childs):
+        query_node.childs[i] = construct_query_node(child,id,query_node)
+        query_node.childsize += 1
+    return query_node
 
 def calculate_v(node):
-    if not isinstance(node, SearchNode):
-        node = SearchNode(node)
     if type(node.label) == int:
-        if node.label not in node.v: node.v.append(node.label)
         if node.label not in node.vorigin: node.vorigin.append(node.label)
-    for child in node.childs:
+        if node.label not in node.v : node.v.append(node.label)
+    for i, child in enumerate(node.childs):
         if type(child.label) == int:
             if child.label not in node.vorigin: node.vorigin.append(child.label)
+            node.voriginfo[child.label] = i
     for (i,child) in enumerate(node.childs):
         node.childs[i] = calculate_v(child)
         for var in node.childs[i].v:
             if var not in node.v: node.v.append(var)
     return node
 
-def calculate_e(node, logic_map,start=True):
-    if not isinstance(node,SearchNode):
-        node = SearchNode(node)
-    rule = transform_into_rule([],node,recurse=False,start=start) if len(node.childs) != 0 else []
-    if len(rule) > 0:
-        node.e = set([i for i in logic_map[str_logical_rule(rule[0])]])
-        node.eorigin = set([i for i in logic_map[str_logical_rule(rule[0])]])
+def prune_node(node):
+    i = len(node.childs) - 1
+    while i >= 0: 
+        if type(node.childs[i].label) == int:
+            del node.childs[i]
+        else:
+            node.childs[i] = prune_node(node.childs[i])
+        i -= 1
+    return node
+
+def calculate_bound(node,parent_bound=set([])):
+    node.bound = [x for x in node.v if x in parent_bound] if len(node.childs) > 0 else node.vorigin
+    for index, child in enumerate(node.childs):
+        sibling_bound = filter(lambda x: x not in child.v, node.v)
+        child_set = set()
+        for child_index, y in enumerate(node.childs):
+            if child_index != index:
+                for z in y.v:
+                    child_set.add(z)
+        for v in node.vorigin:
+            child_set.add(v)
+        calculate_bound(child,child_set)
+    return node
+
+def print_node_list(node):
+    for child in node.childs:
+        print_node_list(child)
+    print node 
+
+def assign_head(node):
+    for child in node.childs:
+        assign_head(child)
+    node.head = select_head(node.label)
+    return node
+
+def calculate_e(node, logic_map,aligned_word,start=True):
+    if type(node.label) != int:
+        words = [i for i in logic_map[str_logical_rule(node.label,node.id)]]
+        node.e = []
+        node.eorigin = []
+        for w in words:
+            node.e.append(w)
+            node.eorigin.append(w)
+            aligned_word.add(w)
     for (i,child) in enumerate(node.childs):
-        node.childs[i] = calculate_e(child, logic_map,False)
+        node.childs[i] = calculate_e(child, logic_map,aligned_word,False)
         for word in node.childs[i].e:
-            node.e.add(word)
+            node.e.append(word)
+    node.e = sorted(node.e)
+    node.eorigin = sorted(node.eorigin)
     return node
 
 def change_not_and_conj(node):
@@ -563,44 +328,6 @@ def transform_multi_words_entity(node):
         node.childs[i] = transform_multi_words_entity(child)
     return node
 
-def rindex_nempty(l):
-    k = len(l)-1
-    while k >= 0:
-        if l[k] != []:
-            break
-        k -= 1
-    return k 
-
-def merge_unary(node):
-    # we start from the children
-    child_spans = []
-    w_i = sorted(list(node.eorigin))
-    w_i_max = sorted(list(node.e))
-    legal = True
-    for i, child in enumerate(node.childs):
-        if len(child.childs) != 0 and len(child.e) != 0:
-            _, span = merge_unary(child)
-            child_spans.append((i,span))
-
-    child_spans = sorted(list(child_spans)+[(-1,(x,x)) for x in w_i if (x,x) not in set([y[1] for y in child_spans])],key=lambda x: x[1][0])
-
-    # Checking unarity
-    if len(child_spans) == 1 and child_spans[0][0] > 0:
-        unary_child = node.childs[child_spans[0][0]]
-        x_quer = [n.label for n in node.childs if type(n.label) == int]
-        node.childs = [] # clear the child ## DANGER MAY BECOME BUG
-
-        for e in unary_child.eorigin: node.eorigin.add(e)
-        for v in unary_child.vorigin: 
-            if v not in node.vorigin: node.vorigin.append(v)
-
-        node.label += "(" + ",".join(["x" + str(n) for n in x_quer]) + ("," if len(x_quer) != 0 else "") \
-             + select_label(unary_child.label)
-        for unary_child_child in unary_child.childs:
-            node.childs.append(unary_child_child)
-
-    return node, (w_i_max[0],w_i_max[-1])
-
 def select_label(label):
     if label == NEGATION:
         label = "-"
@@ -608,9 +335,18 @@ def select_label(label):
         label = ""
     return label
 
+def select_head(name):
+    ret = str()
+    if name in TYPE_LABEL: ret = name
+    else: ret = FORM
+    if name == 'answer': ret = QUERY
+    return ret
+
+def non_terminal(number, head, bound):
+    return str("x") + str(number) + ":" + head + append_var_info(bound)
+
 def append_var_info(bound):
-    bound_wo = [x for x in bound if type(x) == int]
-    return "["+str(len(bound_wo))+"]" if len(bound_wo) != 0 else ""
+    return "["+str(len(bound))+"]" if len(bound) != 0 else ""
 
 def parse_argument():
     parser = argparse.ArgumentParser(description="Run Lexical Acquisition")
