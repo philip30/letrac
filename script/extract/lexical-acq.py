@@ -12,8 +12,11 @@ from geometric import change_var_to_x
 from geometric import str_logical_rule
 from geometric import kruskal
 from geometric import query_representation
-from stop_word_list import stop_word_list as stop
+from stop_word_list import stop_word_list as stop_word
 from find_error import check_valid_sync_symbol
+
+exclusion = set(['us'])
+stop = [x for x in stop_word if x not in exclusion]
 
 # flag
 QUERY = "QUERY"
@@ -21,9 +24,19 @@ CONJUNCTION = "CONJ"
 NEGATION = "NOT"
 FORM = "FORM"
 COUNT = "COUNT"
-LEAF = "LEAF"
+LEAF = "PRED"
+ENTITY = "ENTITY"
 
 TYPE_LABEL = set([CONJUNCTION,NEGATION,LEAF])
+
+PRECEDENCE = defaultdict(lambda:0)
+PRECEDENCE[QUERY] = 100
+PRECEDENCE[COUNT] = 70
+PRECEDENCE[FORM] = 50
+PRECEDENCE[CONJUNCTION] = 30
+PRECEDENCE[NEGATION] = 40
+PRECEDENCE[LEAF] = 10
+PRECEDENCE[ENTITY] = 5
 
 def main():
     args = parse_argument()
@@ -68,9 +81,16 @@ def main():
         query_node = prune_node(query_node)
         query_node = calculate_bound(query_node)
         query_node = assign_head(query_node)
+        #query_node = mark_leaf(query_node)
         query_node = mark_frontier_node(query_node,set())
 
         rules = lexical_acq(query_node,sent,[],args.merge_unary)
+        
+        if args.three_sync:
+            query_node = calculate_e_key(query_node,sent)
+            query_node = three_sync_frontier_marker(query_node,sent)
+            rules = lexical_acq(query_node,sent,[],args.merge_unary) 
+        
         count += 1
         if (args.verbose):
             print index, "|||",  sent_line.strip()
@@ -78,13 +98,49 @@ def main():
             print_node_list(query_node)
         
         for rule in rules:
-            print rule
+            print extract_three_sync(rule) if args.three_sync else rule
         if (args.verbose):print '----------------------------------------------------------------------------'
     #### Closing all files
     map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file,rule_out_file])
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
+
+def calculate_e_key(node, sent):
+    for child in node.childs:
+        calculate_e_key(child,sent)
+    for e in node.e:
+        if sent[e] not in stop:
+            node.ekeyword.append(e)
+    return node
+
+def mark_leaf(node):
+    for child in node.childs:
+        mark_leaf(child)
+    if len(node.childs) == 0:
+        if len(node.bound) == 0:
+            node.head = ENTITY
+        else:
+            node.head = LEAF
+    return node
+
+def three_sync_frontier_marker(node,sent):
+    for child in node.childs:
+        three_sync_frontier_marker(child,sent)
+    if node.frontier:
+        words_head = node.result.split(" ||| ")[0].split()
+        words = words_head[:-2]
+        count = 0
+        for w in words:
+            if w[0] == '"' and w[-1] == '"':
+                w = w[1:-1]
+                if w in stop:
+                    count += 1
+        unary = count == len(words)-1 and len(node.childs) == 1 and node.label == node.childs[0].label and len(node.bound) == len(node.childs[0].bound)
+        if count == len(words) or unary:
+            node.frontier = False # Merge this node
+        node.frontier = node.frontier and unary_precedence_constraint(node)
+    return node
 
 def align_unaligned_source(node, start, end, aligned_word):
     child_spans = set(node.eorigin)
@@ -112,7 +168,9 @@ def lexical_acq(node,sent,rules,merge_unary=False):
     if node.frontier:
         sentence, (logic,_) = extract_node(node,sent,{},merge_unary)
         logic = merge_logic_output(logic)
-        rules.append(sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound))
+        res = sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound)
+        node.result = res
+        rules.append(res)
     for child in node.childs:
         lexical_acq(child,sent,rules,merge_unary)
     return rules
@@ -129,6 +187,8 @@ def extract_node(node,sent,var_map,merge_unary,start=True):
         aligned = child.e
         if len(aligned) > 0:
             span.append((aligned[0],aligned[-1],child))
+        else:
+            span.append((-1,-1,child))
     
     sorted(span,key=lambda x:x[0]) # sort the key including the first prefix to come.
     for s in span:
@@ -145,7 +205,7 @@ def extract_node(node,sent,var_map,merge_unary,start=True):
             sent_child, logic_child = extract_node(s[2],sent,var_map,merge_unary,start=False)
             for s in sent_child: sent_list.append(s)
             logic_list.append(logic_child)
-    
+   
     # orig info insertion
     for vor in node.vorigin:
         logic_list.insert(node.voriginfo[vor],vor)
@@ -215,7 +275,27 @@ def mark_frontier_node(node, complement_span):
     # is a node where every of its complement span is not in the span.
     span = node.e
     node.frontier = (not len(span) == 0) and (not any(e >= span[0] and e <= span[-1] for e in node.complement))
+
+    # Additional rule for precedence
+    node.frontier = node.frontier and unary_precedence_constraint(node)
+
     return node
+
+def unary_precedence_constraint(node,three_sync=False):
+    ret = True
+    # For all child
+    frontiers = []
+    for child in node.childs:
+        if child.frontier:
+            frontiers.append(child)
+    if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head]:
+        if not three_sync:
+            ret = False
+        else:
+            spanb1,spanb2 = (node.ekeyword[0], node.ekeyword[-1])
+            spanc1,spanc2 = (frontiers[0].ekeyword[0], frontiers[0].ekeyword[-1])
+            ret = not ((spanb1 == spanc1) and (spanc1 == spanc2))
+    return ret
 
 def sent_map(span,sent):
     ret = []
@@ -366,53 +446,19 @@ def parse_argument():
     return parser.parse_args()
 
 # 3 Synch Grammar
-prec = defaultdict(lambda:0)
-prec[QUERY] = 100
-prec[COUNT] = 70
-prec[FORM] = 50
-prec[CONJUNCTION] = 30
-prec[NEGATION] = 40
-prec[LEAF] = 10
-def loop(l):
-    k = False
-    if len(l) == 3:
-        y = l[0]
-        if not (y[0] == '"' and y[-1] == '"'):
-            _, label = y.split(":")
-            return label == l[-1]
-    return k
-
-def unary_before(l):
-    k = False
-    if len(l) == 3:
-        y1,label2 = l[0], l[-1]
-        if y1[0] != '"' and y1[-1] != '"':
-            label1 = y1.split(":")[1]
-            if '[' in label1: label1 = label1[:label1.find('[')]
-            if '[' in label2: label2 = label2[:label2.find('[')]
-
-            if label1 not in prec: print >> sys.stderr, "Unrecognizable label:", label1
-            if label2 not in prec: print >> sys.stderr, "Unrecognizable label:", label2
-
-            return prec[label1] > prec[label2]
-    return k
-
 def extract_three_sync(rule):
     line = rule.split(" ||| ")
     left = []
     for word in line[0].split():
         if word[0] == '"' and word[-1] == '"':
             wordi = word[1:-1]
-            if wordi == 'us' or wordi not in stop:
+            if  wordi not in stop:
                 left.append(word)
         else:
             left.append(word)
 
-    if loop(left) or unary_before(left): #or len(left) == 2
-        rule = ""
-    else:
-        if len(left) == 2: left.insert(0,"")
-        rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
+    if len(left) == 2: left.insert(0,"")
+    rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
     return rule
 
 if __name__ == "__main__":

@@ -154,7 +154,7 @@ def change_x_to_var(l):
     now = 0
     while True:
         occ = line.find('x',now)
-        if occ == -1:
+        if occ == -1 or occ == len(line)-1:
             break
         if line[occ+1] in number_set:
             var = line[occ:occ+2]

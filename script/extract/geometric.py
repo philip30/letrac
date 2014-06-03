@@ -31,6 +31,8 @@ class SearchNode:
         self.voriginfo = {}
         self.childsize = 0
         self.head = ""
+        self.result = []
+        self.ekeyword = []
 
     def __str__(self):
         k = "ID: " +str(self.id) + "\n"
