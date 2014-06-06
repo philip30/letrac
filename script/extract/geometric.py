@@ -33,6 +33,11 @@ class SearchNode:
         self.head = ""
         self.result = []
         self.ekeyword = []
+        self.frontier_child = {}
+    
+    def not_frontier(self):
+        self.frontier = False
+        self.frontier_child = {}
 
     def __str__(self):
         k = "ID: " +str(self.id) + "\n"
@@ -49,6 +54,7 @@ class SearchNode:
         k += "\tfrontier: "+str(self.frontier) + "\n"
         k += "\tchildsize: "+str(self.childsize) + "\n"
         k += "\tvoriginfo: "+str(self.voriginfo) + "\n"
+        k += "\tfrontier_child: "+str([x.id for x in self.frontier_child.values()]) + "\n"
         return k
         
 def extract(line,position=0,parent=""):

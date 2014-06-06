@@ -2,15 +2,19 @@
 
 import sys
 import math
+import argparse
 from collections import defaultdict
 
 context = defaultdict(lambda:0)
 count = defaultdict(lambda:0)
 word_fp = set()
-col_length = 1
 
-if len(sys.argv) > 1:
-    col_length = int(sys.argv[1])
+parser = argparse.ArgumentParser()
+parser.add_argument('--col_length', type=int,default = 1)
+parser.add_argument('--one_feature', action="store_true")
+args = parser.parse_args()
+
+col_length = args.col_length
 
 def feat(key, value):
     if float(value) > 1e-8:
@@ -43,14 +47,15 @@ for i,line in enumerate(sys.stdin):
     context[log] += 1
     context[""] += 1
 
-for ((sent,log), cnt) in sorted(count.items(),key=lambda x:x[0]):
+for (i,((sent,log), cnt)) in enumerate(sorted(count.items(),key=lambda x:x[0])):
     print "%s ||| %s ||| %s" % (sent,log, ' '.join(filter(lambda x: x != "", [\
         feat("psgl", -math.log(float(cnt)/context[log])), \
         feat("plgs", -math.log(float(cnt)/context[sent])), \
         feat("prob", -math.log(float(cnt)/context[""])),\
         feat("count", cnt), \
         feat("parse", is_parse(sent.split()[:-2])),\
-        feat("paralen", paralength((log.split(" |COL| ")[0]).split()))\
+        feat("paralen", paralength((log.split(" |COL| ")[0]).split())),\
+        feat("r"+str(i),(1 if args.one_feature else 0))\
         ])))
 
 for word in sorted(word_fp):

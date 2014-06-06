@@ -81,22 +81,25 @@ def main():
         query_node = prune_node(query_node)
         query_node = calculate_bound(query_node)
         query_node = assign_head(query_node)
-        #query_node = mark_leaf(query_node)
+       # query_node = mark_leaf(query_node)
         query_node = mark_frontier_node(query_node,set())
 
-        rules = lexical_acq(query_node,sent,[],args.merge_unary)
+        lexical_acq(query_node,sent,[],args.merge_unary)
         
         if args.three_sync:
             query_node = calculate_e_key(query_node,sent)
             query_node = three_sync_frontier_marker(query_node,sent)
-            rules = lexical_acq(query_node,sent,[],args.merge_unary) 
+            lexical_acq(query_node,sent,[],args.merge_unary) 
         
         count += 1
         if (args.verbose):
             print index, "|||",  sent_line.strip()
             print_node(query_node,stream=sys.stdout) 
             print_node_list(query_node)
-        
+       
+        rules = []
+        compose_rule(rules, query_node, args.max_size)
+
         for rule in rules:
             print extract_three_sync(rule) if args.three_sync else rule
         if (args.verbose):print '----------------------------------------------------------------------------'
@@ -105,6 +108,62 @@ def main():
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
+
+def compose_rule(rules,node, max_size):
+    ret = [(node.result,1)]
+    for nt, child in node.frontier_child.items():
+        ret_child = compose_rule(rules,child,max_size)
+        composed = []
+        for r_parent,p_size in ret:
+            for r,c_size in ret_child:
+                if c_size+p_size <= max_size:
+                    composed.append((compose_rule_string(nt, r_parent, r),c_size+p_size))
+        for c,size in composed:
+            ret.append((rename_non_terminal(c),size))
+    for r,size in ret:
+        rules.append(r)
+    return ret
+
+def compose_rule_string(nt, parent, child):
+    parent_col = parent.split(' ||| ')
+    child_col = child.split(' ||| ')
+    ret = []
+    for (p_col, c_col) in zip(parent_col,child_col):
+        p_col_token = p_col.split()
+        c_col_token = c_col.split()
+        for i, p_token in enumerate(p_col_token):
+            if p_token == '@': break 
+            if p_token[0] != '"' and p_token[-1] != '"' and p_token[0] == 'x' and p_token[1] == str(nt):
+                p_col_token[i] = replace_x_with_y(' '.join(c_col_token[:-2]),nt)
+                break
+        ret.append(' '.join(p_col_token))
+    return ' ||| '.join(ret)
+
+def replace_x_with_y(ss,index):
+    # to avoid conflict in merging, rename x in child first into y, resolve later into new x
+    ss = ss.split()
+    for i, s in enumerate(ss):
+        if s == '@': break
+        if s[0] != '"' and s[-1] != '"':
+            ss[i] = str(index)+ ss[i][1:]
+    return ' '.join(ss)
+
+def rename_non_terminal(c):
+    nt_map = {}
+    parts = c.split(" ||| ")
+    ret = []
+    for part in parts:
+        tokens = part.split()
+        for i, token in enumerate(tokens):
+            if token == '@': break
+            if token[0] != '"' and token[-1] != '"' and token[0] != 'x':
+                t = token[:2]
+                if t not in nt_map:
+                    nt_new = 'x' + str(len(nt_map))
+                    nt_map[t] = nt_new
+                tokens[i] = nt_map[t] + token[2:]
+        ret.append(' '.join(tokens))
+    return ' ||| '.join(ret)
 
 def calculate_e_key(node, sent):
     for child in node.childs:
@@ -166,7 +225,7 @@ def align_unaligned_source(node, start, end, aligned_word):
 
 def lexical_acq(node,sent,rules,merge_unary=False):
     if node.frontier:
-        sentence, (logic,_) = extract_node(node,sent,{},merge_unary)
+        sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary)
         logic = merge_logic_output(logic)
         res = sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound)
         node.result = res
@@ -175,7 +234,7 @@ def lexical_acq(node,sent,rules,merge_unary=False):
         lexical_acq(child,sent,rules,merge_unary)
     return rules
 
-def extract_node(node,sent,var_map,merge_unary,start=True):
+def extract_node(root,node,sent,var_map,merge_unary,start=True):
     # extracting sent side
     span = []
     sent_list = []
@@ -200,9 +259,10 @@ def extract_node(node,sent,var_map,merge_unary,start=True):
             sent_list.append((s[0],s[1],nt))
             logic_list.append((nt,s[2].bound))
             var_map[s[2].id] = number
+            root.frontier_child[number] = s[2]
         else: # depth recursion to this node, extraction continued rooted at this node
-            s[2].frontier = False
-            sent_child, logic_child = extract_node(s[2],sent,var_map,merge_unary,start=False)
+            s[2].not_frontier()
+            sent_child, logic_child = extract_node(root,s[2],sent,var_map,merge_unary,start=False)
             for s in sent_child: sent_list.append(s)
             logic_list.append(logic_child)
    
@@ -442,7 +502,7 @@ def parse_argument():
     parser.add_argument('--void_span', action="store_true",help="Give void span to unaligned words.")
     parser.add_argument('--bare_rule', action="store_true",help="print rule independently.")
     parser.add_argument('--no_expand', action="store_true",help="Do not permute all the merging.")
-    parser.add_argument('--max_compose_depth',type=int, default=0)
+    parser.add_argument('--max_size', type=int, default=4,help="Compose max size")
     return parser.parse_args()
 
 # 3 Synch Grammar

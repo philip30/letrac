@@ -23,7 +23,7 @@ def validate(line,gs):
             while line[k] != ')' and k < len(line):
                 k += 1
     
-    if ret[-1] == '.': ret = ret[:-1]
+    if len(ret) > 1 and ret[-1] == '.': ret = ret[:-1]
 
     if any(x in OMIT_SET for x in ret):
         ret = 'stateid(omit)?'
