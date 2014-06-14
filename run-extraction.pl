@@ -9,7 +9,8 @@ binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
 my ($PIALIGN_DIR, $WORKING_DIR, $NO_EXPAND, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
-my ($VOID_SPAN, $BARE_RULE, $THREE_SYNC);
+my ($VOID_SPAN, $BARE_RULE, $THREE_SYNC, $MAX_SIZE);
+my $MAX_SIZE = "4";
 
 GetOptions(
     # Necessary
@@ -25,6 +26,7 @@ GetOptions(
 	"void-span!" => \$VOID_SPAN,
 	"bare-rule!" => \$BARE_RULE,
     "no-expand!" => \$NO_EXPAND,
+    "max-size=s" => \$MAX_SIZE,
     "force!" => \$FORCE
 );
 
@@ -68,7 +70,7 @@ safesystem("$LETRAC_DIR/script/extract/make-isomorphic.py --sent $WORKING_DIR/da
 exit(0) if $LAST_STEP eq "isomorph"; 
 
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt";
+my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $WORKING_DIR/align/align.txt --max_size $MAX_SIZE";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;

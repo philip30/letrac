@@ -29,7 +29,8 @@ def main():
     # Printing weight
     print "[weight_vals]"
     for weight_key, weight_val in feature.items():
-        print weight_key + "=" + str(weight_val)
+        if weight_key != "lm" or args.lm_file != "": 
+            print weight_key + "=" + str(weight_val)
 
 def write_config(key, value,stream=sys.stdout):
     if key != 'lm' or args.lm_file:

@@ -8,6 +8,7 @@ from collections import defaultdict
 context = defaultdict(lambda:0)
 count = defaultdict(lambda:0)
 word_fp = set()
+symbol_set = set()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--col_length', type=int,default = 1)
@@ -39,8 +40,11 @@ def paralength(paraphrase):
 for i,line in enumerate(sys.stdin):
     (sent, log) = line.strip().split(" ||| ")
     for word in sent.split():
+        if word == '@': break
         if len(word) > 1 and word[0] == '"' and word[-1] == '"':
             word_fp.add(word[1:-1])
+        else:
+            symbol_set.add(word[word.find(":")+1:])
 
     count[sent,log] += 1
     context[sent] += 1
@@ -59,4 +63,5 @@ for (i,((sent,log), cnt)) in enumerate(sorted(count.items(),key=lambda x:x[0])):
         ])))
 
 for word in sorted(word_fp):
-    print "\"%s\" x0:QUERY @ QUERY ||| %s @ QUERY ||| del=1" % (word.strip(), ' |COL| '.join(["x0:QUERY"]*col_length))
+    for symbol in symbol_set:
+        print "\"%s\" x0:%s @ %s ||| %s @ %s ||| del=1" % (word.strip(), symbol, symbol, ' |COL| '.join(["x0:"+symbol]*col_length),symbol)

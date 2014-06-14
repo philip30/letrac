@@ -4,7 +4,7 @@ import sys
 import argparse
 import qdatabase
 
-MAX_VAR = 6
+MAX_VAR = 14
 DELAY = 10000
 OMIT_SET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[MAX_VAR:])
 

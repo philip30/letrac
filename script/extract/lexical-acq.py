@@ -81,7 +81,7 @@ def main():
         query_node = prune_node(query_node)
         query_node = calculate_bound(query_node)
         query_node = assign_head(query_node)
-       # query_node = mark_leaf(query_node)
+        query_node = mark_leaf(query_node)
         query_node = mark_frontier_node(query_node,set())
 
         lexical_acq(query_node,sent,[],args.merge_unary)
@@ -119,9 +119,9 @@ def compose_rule(rules,node, max_size):
                 if c_size+p_size <= max_size:
                     composed.append((compose_rule_string(nt, r_parent, r),c_size+p_size))
         for c,size in composed:
-            ret.append((rename_non_terminal(c),size))
+            ret.append((c,size))
     for r,size in ret:
-        rules.append(r)
+        rules.append(rename_non_terminal(r))
     return ret
 
 def compose_rule_string(nt, parent, child):
@@ -156,7 +156,7 @@ def rename_non_terminal(c):
         tokens = part.split()
         for i, token in enumerate(tokens):
             if token == '@': break
-            if token[0] != '"' and token[-1] != '"' and token[0] != 'x':
+            if token[0] != '"' and token[-1] != '"':
                 t = token[:2]
                 if t not in nt_map:
                     nt_new = 'x' + str(len(nt_map))
@@ -173,14 +173,19 @@ def calculate_e_key(node, sent):
             node.ekeyword.append(e)
     return node
 
-def mark_leaf(node):
+def mark_leaf(node,parent=None):
     for child in node.childs:
-        mark_leaf(child)
+        mark_leaf(child,node)
     if len(node.childs) == 0:
-        if len(node.bound) == 0:
-            node.head = ENTITY
+        if parent is not None and parent.label.endswith("id"):
+            node.head = parent.label[:-2].upper()
         else:
             node.head = LEAF
+         
+        #if len(node.bound) == 0:
+        #    node.head = ENTITY
+        #else:
+        #    node.head = LEAF
     return node
 
 def three_sync_frontier_marker(node,sent):
@@ -224,23 +229,30 @@ def align_unaligned_source(node, start, end, aligned_word):
     return (node, unaligned)
 
 def lexical_acq(node,sent,rules,merge_unary=False):
+    for child in node.childs:
+        lexical_acq(child,sent,rules,merge_unary)
     if node.frontier:
-        sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary)
+        node.frontier_child = {}
+        sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary,{})
         logic = merge_logic_output(logic)
         res = sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound)
         node.result = res
         rules.append(res)
-    for child in node.childs:
-        lexical_acq(child,sent,rules,merge_unary)
     return rules
 
-def extract_node(root,node,sent,var_map,merge_unary,start=True):
+def extract_node(root,node,sent,var_map,merge_unary,bound_map,start=True):
     # extracting sent side
     span = []
     sent_list = []
     logic_list = []
+   
     for word in node.eorigin:
         span.append((word,word,sent[word]))
+
+    # map bound of this node
+    #node.bound_remap = bound_remapping(node.bound, bound_map)
+    node.bound_remap = node.bound
+
     for child in node.childs:
         # There is a word aligned to this subtree
         aligned = child.e
@@ -248,30 +260,33 @@ def extract_node(root,node,sent,var_map,merge_unary,start=True):
             span.append((aligned[0],aligned[-1],child))
         else:
             span.append((-1,-1,child))
-    
+
     sorted(span,key=lambda x:x[0]) # sort the key including the first prefix to come.
     for s in span:
         if type(s[2]) == str:
             sent_list.append((s[0],s[1],'"'+s[2]+'"'))
         elif s[2].frontier and not (merge_unary and is_unary(node,s[2])):
             number = len(var_map)
+            #nt = non_terminal(number,s[2].head,bound_remapping(s[2].bound,bound_map))
             nt = non_terminal(number,s[2].head,s[2].bound)
             sent_list.append((s[0],s[1],nt))
+            #logic_list.append((nt,bound_remapping(s[2].bound, bound_map)))
             logic_list.append((nt,s[2].bound))
             var_map[s[2].id] = number
             root.frontier_child[number] = s[2]
         else: # depth recursion to this node, extraction continued rooted at this node
             s[2].not_frontier()
-            sent_child, logic_child = extract_node(root,s[2],sent,var_map,merge_unary,start=False)
+            sent_child, logic_child = extract_node(root,s[2],sent,var_map,merge_unary,bound_map,start=False)
             for s in sent_child: sent_list.append(s)
             logic_list.append(logic_child)
    
     # orig info insertion
     for vor in node.vorigin:
+        #logic_list.insert(node.voriginfo[vor],bound_mapping(vor,bound_map))
         logic_list.insert(node.voriginfo[vor],vor)
 
     # Logic string
-    logic = '%s "%s' % (bound_to_lambda(node.bound),select_label(node.label))
+    logic = '%s "%s' % (bound_to_lambda(node.bound_remap),select_label(node.label))
     if len(logic_list) != 0:
         logic += '(" '
         for i, item in enumerate(logic_list):
@@ -285,6 +300,17 @@ def extract_node(root,node,sent,var_map,merge_unary,start=True):
     logic += '"'
     return (sent_list if not start else (' '.join([x[2] for x in sorted(sent_list,key=lambda x:x[0])])),\
             (logic,node.bound))
+
+def bound_remapping(bound, bound_map):
+    ret = []
+    for x in bound:
+        ret.append(bound_mapping(x,bound_map))
+    return ret
+
+def bound_mapping(v, bound_map):
+    if v not in bound_map:
+        bound_map[v] = len(bound_map) + 1
+    return bound_map[v]
 
 def merge_logic_output(logic):
     words = logic.split()
@@ -307,7 +333,8 @@ def merge_logic_output(logic):
     return ' '.join(words)
 
 def is_unary(parent, node):
-    return parent.head == node.head and len(parent.childs) == 1
+    merge = parent.e[0] == node.e[0] and parent.e[-1] == node.e[-1]
+    return parent.head == node.head and len(parent.childs) == 1 
 
 def bound_to_lambda(bound):
     return ("\"" + "".join(["\\x" + str(x) for x in reversed(bound)])+".\"" if len(bound) > 0 else "")

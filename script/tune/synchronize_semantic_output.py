@@ -7,7 +7,7 @@ import qdatabase
 
 err = [];
 out = [];
-EMPTY_ANSWER = "Ans = []"
+EMPTY_ANSWER = "Answer = []"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--log_file', type=str)

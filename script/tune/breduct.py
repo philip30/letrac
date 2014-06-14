@@ -27,14 +27,17 @@ def main():
 
     for line in sys.stdin:
         line = line.strip()
-        output = breduct(line,RenameMap())
+        try :
+            output = breduct(line,RenameMap())
         
-        if not check_output(output):
-            print >> sys.stderr, "This output does not have correct parentheses:", output
-            sys.exit(1)
+            if not check_output(output):
+                print >> sys.stderr, "This output does not have correct parentheses:", output
+                sys.exit(1)
 
 
-        print (output if not args.alphabet else change_x_to_var(output))
+            print (output if not args.alphabet else change_x_to_var(output))
+        except:
+            print "Failed to parse:",line
 
 def rename(inner, lmbd, rename_map):
     lmbd_set = set(lmbd)

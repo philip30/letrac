@@ -34,7 +34,8 @@ class SearchNode:
         self.result = []
         self.ekeyword = []
         self.frontier_child = {}
-    
+        self.bound_remap = []
+
     def not_frontier(self):
         self.frontier = False
         self.frontier_child = {}
