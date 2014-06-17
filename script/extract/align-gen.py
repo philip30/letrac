@@ -19,7 +19,7 @@ many_literals = []
 words = set()
 
 
-manual_align = {"in":"loc", "me":"answer","the":"answer", "can":"answer", "you":"answer", "tell":"answer", "is":"answer", "name":"answer", "cities": "city", "rivers":"river"}
+manual_align = {}
 
 def main():
     parser = argparse.ArgumentParser(description="Run Geoparse Alignment Input Generator")
@@ -27,7 +27,14 @@ def main():
     parser.add_argument('--osent',type=str,required=True,help="Directory where sentence is outputed")
     parser.add_argument('--ologic',type=str,required=True,help="Directory where logical-form is outputed")
     parser.add_argument('--output',type=str,help="Directory where verbosed output is generated")
+    parser.add_argument('--manual',type=str)
     args = parser.parse_args()
+
+    if args.manual:
+        with open(args.manual) as fp:
+            for line in fp:
+                a, b = line.strip().split()
+                manual_align[a] = b
 
     linecount = 0 
     inp = open(args.input,"r")

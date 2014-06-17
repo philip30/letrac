@@ -5,7 +5,7 @@ import argparse
 import qdatabase
 
 MAX_VAR = 14
-DELAY = 10000
+DELAY = 21000
 OMIT_SET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[MAX_VAR:])
 
 def validate(line,gs):

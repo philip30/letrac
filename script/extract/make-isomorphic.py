@@ -21,7 +21,6 @@ def main():
     fol_file = open(args.fol,'r')
     align_file = open(args.align,'r')
     out_file = open(args.out,'w')
-
     # input - sentence - fol - align
     for (inp_line,sent_line, fol_line, align_line) in zip(inp_file,sent_file,fol_file,align_file):
         inp_line = inp_line.strip()
@@ -29,7 +28,6 @@ def main():
         (sentence_node, query_node) = query.childs # get the tree representation by extracting the geoquery
 
         (sent, fol, align_line) = map(lambda x: x.strip().split(), (sent_line, fol_line, align_line)) 
-
         # creating mapping from F -> [w1,w2,...] where w1 w2 are words aligned to F(OL)
         s2l = defaultdict(lambda:set())
         for align in align_line:

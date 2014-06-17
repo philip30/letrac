@@ -26,6 +26,7 @@ FORM = "FORM"
 COUNT = "COUNT"
 LEAF = "PRED"
 ENTITY = "ENTITY"
+ABREVIATION = "ABR"
 
 TYPE_LABEL = set([CONJUNCTION,NEGATION,LEAF])
 
@@ -37,6 +38,7 @@ PRECEDENCE[CONJUNCTION] = 30
 PRECEDENCE[NEGATION] = 40
 PRECEDENCE[LEAF] = 10
 PRECEDENCE[ENTITY] = 5
+PRECEDENCE[ABREVIATION] = 10
 
 def main():
     args = parse_argument()
@@ -178,7 +180,10 @@ def mark_leaf(node,parent=None):
         mark_leaf(child,node)
     if len(node.childs) == 0:
         if parent is not None and parent.label.endswith("id"):
-            node.head = parent.label[:-2].upper()
+            if len(node.label) < 3:
+                node.head = ABREVIATION
+            else:
+                node.head = parent.label[:-2].upper()
         else:
             node.head = LEAF
          
@@ -233,21 +238,23 @@ def lexical_acq(node,sent,rules,merge_unary=False):
         lexical_acq(child,sent,rules,merge_unary)
     if node.frontier:
         node.frontier_child = {}
-        sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary,{})
+        sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary,{},[False] * len(sent))
         logic = merge_logic_output(logic)
         res = sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound)
         node.result = res
         rules.append(res)
     return rules
 
-def extract_node(root,node,sent,var_map,merge_unary,bound_map,start=True):
+def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=True):
     # extracting sent side
     span = []
     sent_list = []
     logic_list = []
    
     for word in node.eorigin:
-        span.append((word,word,sent[word]))
+        if not extracted[word]:
+            extracted[word] = True
+            span.append((word,word,sent[word]))
 
     # map bound of this node
     #node.bound_remap = bound_remapping(node.bound, bound_map)
@@ -276,7 +283,7 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,start=True):
             root.frontier_child[number] = s[2]
         else: # depth recursion to this node, extraction continued rooted at this node
             s[2].not_frontier()
-            sent_child, logic_child = extract_node(root,s[2],sent,var_map,merge_unary,bound_map,start=False)
+            sent_child, logic_child = extract_node(root,s[2],sent,var_map,merge_unary,bound_map,extracted,start=False)
             for s in sent_child: sent_list.append(s)
             logic_list.append(logic_child)
    

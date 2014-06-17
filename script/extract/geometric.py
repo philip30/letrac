@@ -116,7 +116,7 @@ def query_representation(node,map,input_generator=False,root=True):
 
 # rule = (Type, Label, child)
 def transform_into_rule(rules,node,start=False,recurse=True,depth=0):
-    if node.label != "":
+    if node.label != "" and node.label != "const" and not node.label.endswith("id"):
         rule = (QUERY if start else FORM, node.label, [],depth, node.id)
         for child in node.childs:
             if len(child.childs) == 0:

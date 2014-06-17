@@ -13,6 +13,7 @@ symbol_set = set()
 parser = argparse.ArgumentParser()
 parser.add_argument('--col_length', type=int,default = 1)
 parser.add_argument('--one_feature', action="store_true")
+parser.add_argument('--kb',type=str)
 args = parser.parse_args()
 
 col_length = args.col_length
@@ -61,6 +62,52 @@ for (i,((sent,log), cnt)) in enumerate(sorted(count.items(),key=lambda x:x[0])):
         feat("paralen", paralength((log.split(" |COL| ")[0]).split())),\
         feat("r"+str(i),(1 if args.one_feature else 0))\
         ])))
+
+
+if args.kb:
+    def build_source(head,name):
+        name = name.split()
+        return (" ".join(['"%s"' % (x) for x in name]) + " @ " + head)
+
+    def build_target(targetid,arg):
+        innerarg = []
+        for a in arg:
+            if ' ' in a: 
+                a = "'" + a.replace(" ","#$#") + "'"
+            innerarg.append(a)
+        innerarg = ','.join(innerarg)
+        s = '"%s" @ %s' % (innerarg, targetid)
+        if args.col_length > 1:
+            s = build_source(name) + " |COL| " + s
+        return s
+
+    scan = False
+    with open(args.kb,"r") as kbs:
+        all_map = set()
+        for line in kbs:
+            line = line.strip()
+            k = line.find('(')
+            predicate = line[0:k]
+            end = line.find(')',k)
+            body = line[k+1:end].split(",")
+            if predicate == 'state':
+                state_name = body[0][1:-1]
+                print '%s ||| %s ||| state_kb=1' % (build_source("STATE",state_name),build_target("STATE",[state_name]))
+            elif predicate == 'city':
+                state_name, state_abv, city_name = body[0][1:-1], body[1][1:-1], body[2][1:-1]
+                if (("city",city_name)) not in all_map:
+                    all_map.add(("city",city_name))
+                    print '%s ||| %s ||| city_kb=1' % (build_source("CITY",city_name),build_target("CITY",[city_name]))
+                print '%s ||| %s ||| city_kb=1' % (build_source("ABR",state_name),build_target("ABR",[state_abv]))
+            elif predicate == 'river':
+                river_name = body[0][1:-1]
+                print '%s ||| %s ||| river_kb=1' % (build_source("RIVER",river_name),build_target("RIVER",[river_name]))
+            elif predicate == 'mountain':
+                mountain_name = body[2][1:-1]
+                print '%s ||| %s ||| mountain_kb=1' % (build_source("PLACE",mountain_name),build_target("PLACE",[mountain_name]))
+            elif predicate == 'lake':
+                lake_name = body[0][1:-1]
+                print '%s ||| %s ||| lake_kb=1' % (build_source("PLACE",lake_name),build_target("PLACE",[lake_name]))
 
 for word in sorted(word_fp):
     for symbol in symbol_set:
