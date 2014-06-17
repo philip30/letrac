@@ -46,19 +46,17 @@ if (not (mkdir $WORKING_DIR)) {
 } 
 
 safesystem("mkdir $WORKING_DIR/data");
-safesystem("mkdir $WORKING_DIR/model");
-
 # Preparing input for alignment
 safesystem("$LETRAC_DIR/script/extract/input_preprocess.py < $INPUT > $WORKING_DIR/data/$file_name.preprocess");
 
 # Creating input for alignment
-safesystem("mkdir $WORKING_DIR/align");
 my $manual = $MANUAL ? " --manual $MANUAL" : "";
 safesystem("$LETRAC_DIR/script/extract/align-gen.py$manual --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $WORKING_DIR/data/$file_name.preprocess") or die "Failed on creating input for alignment";
 safesystem("$LETRAC_DIR/script/extract/swr.py < $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.kword") if ($THREE_SYNC);
 exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
+safesystem("mkdir $WORKING_DIR/align");
 if (not $ALIGN) {
     $ALIGN = "$WORKING_DIR/align/align.txt";
     safesystem("$PIALIGN_DIR/src/bin/pialign $WORKING_DIR/data/$file_name.sent.gin $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/align/align-out. 2> $WORKING_DIR/align/pialign-log.txt") or die "Failed on running alignment";
@@ -75,6 +73,8 @@ safesystem("mkdir $WORKING_DIR/iso");
 safesystem("$LETRAC_DIR/script/extract/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --input $WORKING_DIR/data/$file_name.preprocess --out $WORKING_DIR/iso/$file_name.ism");
 exit(0) if $LAST_STEP eq "isomorph"; 
 
+
+safesystem("mkdir $WORKING_DIR/model");
 # lexical-acquisition
 my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
 $lex_command .= " --verbose" if $VERBOSE;
