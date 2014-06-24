@@ -26,7 +26,10 @@ def main():
     
 def read_list(line):
     line_set = set()
-    _, line = line.strip().split(" = ")
+    temp = line.strip().split(" = ")
+    if len(temp) == 1:
+        return set([])
+    _, line = temp[0], temp[1]
     line = line[1:-1]
     for item in line.split(','):
         _item = None

@@ -57,7 +57,10 @@ def read(loc,query):
     f = open(build_path(loc,query),"r")
     line1 = f.readline().strip()
     if line1 != query:
-        print >> sys.stderr, "ERROR, hash error double:" + query + " with " + line1
+        if line1 == '':
+            os.remove(build_path(loc,query))
+        else:
+            print >> sys.stderr, "ERROR, hash error double:" + query + " with " + line1
         return None
     ret = f.readline().strip()
     f.close()

@@ -78,7 +78,7 @@ if args.kb:
         innerarg = ','.join(innerarg)
         s = '"%s" @ %s' % (innerarg, targetid)
         if args.col_length > 1:
-            s = build_source(name) + " |COL| " + s
+            s = (" ".join(['"%s"' % (x) for x in arg[0].split()])) + " |COL| " + s
         return s
 
     scan = False
