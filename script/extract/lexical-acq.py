@@ -83,7 +83,7 @@ def main():
         query_node = prune_node(query_node)
         query_node = calculate_bound(query_node)
         query_node = assign_head(query_node)
-        query_node = mark_leaf(query_node)
+        query_node = mark_nt(query_node)
         query_node = mark_frontier_node(query_node,set())
 
         lexical_acq(query_node,sent,[],args.merge_unary)
@@ -175,9 +175,9 @@ def calculate_e_key(node, sent):
             node.ekeyword.append(e)
     return node
 
-def mark_leaf(node,parent=None):
+def mark_nt(node,parent=None):
     for child in node.childs:
-        mark_leaf(child,node)
+        mark_nt(child,node)
     if len(node.childs) == 0:
         if parent is not None and parent.label.endswith("id"):
             if len(node.label) < 3:
