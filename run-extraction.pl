@@ -69,14 +69,14 @@ safesystem("$LETRAC_DIR/script/extract/visualize.pl $WORKING_DIR/data/$file_name
 exit(0) if $LAST_STEP eq "align"; 
 
 # Make it isomorphic
-safesystem("mkdir $WORKING_DIR/iso");
-safesystem("$LETRAC_DIR/script/extract/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --input $WORKING_DIR/data/$file_name.preprocess --out $WORKING_DIR/iso/$file_name.ism");
-exit(0) if $LAST_STEP eq "isomorph"; 
+#safesystem("mkdir $WORKING_DIR/iso");
+#safesystem("$LETRAC_DIR/script/extract/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --input $WORKING_DIR/data/$file_name.preprocess --out $WORKING_DIR/iso/$file_name.ism");
+#exit(0) if $LAST_STEP eq "isomorph"; 
 
 
 safesystem("mkdir $WORKING_DIR/model");
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/iso/$file_name.ism --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
+my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/data/$file_name.preprocess --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
