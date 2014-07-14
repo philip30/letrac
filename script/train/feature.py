@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--col_length', type=int,default = 1)
 parser.add_argument('--one_feature', action="store_true")
 parser.add_argument('--kb',type=str)
+parser.add_argument('--del_file',type=str)
 args = parser.parse_args()
 
 col_length = args.col_length
@@ -60,7 +61,8 @@ for (i,((sent,log), cnt)) in enumerate(sorted(count.items(),key=lambda x:x[0])):
         feat("count", cnt), \
         feat("parse", is_parse(sent.split()[:-2])),\
         feat("paralen", paralength((log.split(" |COL| ")[0]).split())),\
-        feat("r"+str(i),(1 if args.one_feature else 0))\
+        feat("r"+str(i),(1 if args.one_feature else 0)),\
+        feat("rule",1)\
         ])))
 
 
@@ -109,6 +111,11 @@ if args.kb:
                 lake_name = body[0][1:-1]
                 print '%s ||| %s ||| lake_kb=1' % (build_source("PLACE",lake_name),build_target("PLACE",[lake_name]))
 
-for word in sorted(word_fp):
-    for symbol in symbol_set:
-        print "\"%s\" x0:%s @ %s ||| %s @ %s ||| del=1" % (word.strip(), symbol, symbol, ' |COL| '.join(["x0:"+symbol]*col_length),symbol)
+if not args.del_file:
+    for word in sorted(word_fp):
+        for symbol in symbol_set:
+            print "\"%s\" x0:%s @ %s ||| %s @ %s ||| del=1" % (word.strip(), symbol, symbol, ' |COL| '.join(["x0:"+symbol]*col_length),symbol)
+else:
+    with open(args.del_file) as fp:
+        for line in fp:
+            print line.strip()
