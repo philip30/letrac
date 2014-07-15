@@ -22,6 +22,7 @@ class SearchNode:
         self.type = node.type
         self.v = []
         self.vorigin = []
+        self.voutside = []
         self.e = set()
         self.eorigin = set()
         self.bound = []
@@ -47,6 +48,7 @@ class SearchNode:
         k += "\tType: "+self.type + "\n" 
         k += "\tvorig: "+str(self.vorigin) + "\n"
         k += "\tv: "+ str(self.v) + "\n"
+        k += "\tvoutside: " + str(self.voutside) + "\n"
         k += "\teorig: "+str(self.eorigin) + "\n"
         k += "\te: "+ str(self.e) + "\n"
         k += "\theight: "+str(self.height) + "\n"
@@ -56,6 +58,7 @@ class SearchNode:
         k += "\tchildsize: "+str(self.childsize) + "\n"
         k += "\tvoriginfo: "+str(self.voriginfo) + "\n"
         k += "\tfrontier_child: "+str([x.id for x in self.frontier_child.values()]) + "\n"
+        k += "\tresult: "+str(self.result) +"\n"
         return k
         
 def extract(line,position=0,parent=""):

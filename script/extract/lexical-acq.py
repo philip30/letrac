@@ -7,6 +7,7 @@ from collections import defaultdict
 from geometric import transform_into_rule
 from geometric import extract
 from geometric import print_node
+from geometric import Node
 from geometric import SearchNode
 from geometric import change_var_to_x
 from geometric import str_logical_rule
@@ -52,7 +53,8 @@ def main():
 
     #### counter
     count = 0
-
+    
+    fp = open("geoquery.fparse","w")
     #### For input-sentence-fol-alignment
     for (index,(inp_line,sent_line, fol_line, align_line)) in enumerate(zip(inp_file,sent_file,fol_file,align_file)):
         inp_line = inp_line.strip()
@@ -72,20 +74,44 @@ def main():
 
         #### Doing some node annotation, and bound node to which word and variable it is aligned to.
         var_map = defaultdict(lambda:len(var_map)+1)
+                
+        #### Query Node + preprocessing
+        id = []
+        query_node = construct_query_node(query_node,id)
+        query_node = relax_not_node(query_node,id)
+        # alter A->x1, B->x2, and so on
+        query_node = change_var_to_x(query_node,var_map)
+        # change '' to CONJUNCTION and \+ to NEGATION
+        query_node = change_conj(query_node)
+        
+        #### Related to the Word alignment.
         aligned_word = set()
-        query_node = construct_query_node(query_node,[])
-        query_node = change_var_to_x(query_node,var_map) # alter A->x1, B->x2, and so on
-        query_node = calculate_v(query_node)             # give information about variables that bound to node
-        query_node = calculate_e(query_node,s2l,aligned_word)         # give information about which words that are aligned to node
-        query_node,_ = align_unaligned_source(query_node,0,len(sent)-1,aligned_word)
-        query_node = change_not_and_conj(query_node)     # change '' to CONJUNCTION and \+ to NEGATION
-        query_node = transform_multi_words_entity(query_node) # change 'w1 w2' entity into w1_w2
-        query_node = prune_node(query_node)
-        query_node = calculate_bound(query_node)
+        # give information about which words that are aligned to node
+        query_node = calculate_e(query_node,s2l,aligned_word)
+        #### Related to the label.
+        query_node = change_not(query_node)
         query_node = assign_head(query_node)
+        # Mark NT with distinct symbols 
         query_node = mark_nt(query_node)
+        
+        #### Related to the bound 
+        # calculating inside variable
+        query_node = calculate_v(query_node) 
+        # calculating outside variable
+        query_node = calculate_outside_v(query_node)
+        # calculating bound variable
+        query_node = calculate_bound(query_node)
+        # PRUNE all variable node
+        query_node = prune_node(query_node)
+        
+        # aligning unaligned word in the source side, it is aligned to the topmost node
+        query_node,_ = align_unaligned_source(query_node,0,len(sent)-1,aligned_word)
+        # frontier node   
         query_node = mark_frontier_node(query_node,set())
-
+        
+        # change 'w1 w2' entity into w1_w2       
+        query_node = transform_multi_words_entity(query_node)
+        
         lexical_acq(query_node,sent,[],args.merge_unary)
         
         if args.three_sync:
@@ -98,7 +124,8 @@ def main():
             print index, "|||",  sent_line.strip()
             print_node(query_node,stream=sys.stdout) 
             print_node_list(query_node)
-       
+        
+        print >> fp, print_traverse_rule(query_node)[1]
         rules = []
         compose_rule(rules, query_node, args.max_size)
 
@@ -110,6 +137,26 @@ def main():
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
+
+# This is for debug only
+def print_traverse_rule(node):
+    m = {}
+    result = ""
+    for i, child in node.frontier_child.items():
+        index, res = print_traverse_rule(child)
+        m[index] = map(lambda x: " ".join(x.split()[:-2]), res.split(" ||| "))
+    logic = False
+    for token in node.result.split(" "):
+        if token == '@':
+            logic = True
+        if ':' in token:
+            x, _ = token.split(":")
+            x = int(x[1])
+            result += m[node.frontier_child[x].id][1 if logic else 0]
+        else:
+            result += token
+        result += " "
+    return node.id, result
 
 def compose_rule(rules,node, max_size):
     ret = [(node.result,1)]
@@ -186,11 +233,6 @@ def mark_nt(node,parent=None):
                 node.head = parent.label[:-2].upper()
         else:
             node.head = LEAF
-         
-        #if len(node.bound) == 0:
-        #    node.head = ENTITY
-        #else:
-        #    node.head = LEAF
     return node
 
 def three_sync_frontier_marker(node,sent):
@@ -257,8 +299,8 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
             span.append((word,word,sent[word]))
 
     # map bound of this node
-    #node.bound_remap = bound_remapping(node.bound, bound_map)
-    node.bound_remap = node.bound
+    node.bound_remap = bound_remapping(node.bound, bound_map)
+    #node.bound_remap = node.bound
 
     for child in node.childs:
         # There is a word aligned to this subtree
@@ -274,11 +316,11 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
             sent_list.append((s[0],s[1],'"'+s[2]+'"'))
         elif s[2].frontier and not (merge_unary and is_unary(node,s[2])):
             number = len(var_map)
-            #nt = non_terminal(number,s[2].head,bound_remapping(s[2].bound,bound_map))
-            nt = non_terminal(number,s[2].head,s[2].bound)
+            nt = non_terminal(number,s[2].head,bound_remapping(s[2].bound,bound_map))
+            #nt = non_terminal(number,s[2].head,s[2].bound)
             sent_list.append((s[0],s[1],nt))
-            #logic_list.append((nt,bound_remapping(s[2].bound, bound_map)))
-            logic_list.append((nt,s[2].bound))
+            logic_list.append((nt,bound_remapping(s[2].bound, bound_map)))
+            #logic_list.append((nt,s[2].bound))
             var_map[s[2].id] = number
             root.frontier_child[number] = s[2]
         else: # depth recursion to this node, extraction continued rooted at this node
@@ -289,8 +331,8 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
    
     # orig info insertion
     for vor in node.vorigin:
-        #logic_list.insert(node.voriginfo[vor],bound_mapping(vor,bound_map))
-        logic_list.insert(node.voriginfo[vor],vor)
+        logic_list.insert(node.voriginfo[vor],bound_mapping(vor,bound_map))
+        #logic_list.insert(node.voriginfo[vor],vor)
 
     # Logic string
     logic = '%s "%s' % (bound_to_lambda(node.bound_remap),select_label(node.label))
@@ -306,7 +348,7 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
         logic += '")'
     logic += '"'
     return (sent_list if not start else (' '.join([x[2] for x in sorted(sent_list,key=lambda x:x[0])])),\
-            (logic,node.bound))
+            (logic,bound_remapping(node.bound,bound_map)))
 
 def bound_remapping(bound, bound_map):
     ret = []
@@ -341,7 +383,7 @@ def merge_logic_output(logic):
 
 def is_unary(parent, node):
     merge = parent.e[0] == node.e[0] and parent.e[-1] == node.e[-1]
-    return parent.head == node.head and len(parent.childs) == 1 
+    return parent.head == node.head and len(parent.childs) == 1 and merge 
 
 def bound_to_lambda(bound):
     return ("\"" + "".join(["\\x" + str(x) for x in reversed(bound)])+".\"" if len(bound) > 0 else "")
@@ -369,10 +411,8 @@ def mark_frontier_node(node, complement_span):
     # is a node where every of its complement span is not in the span.
     span = node.e
     node.frontier = (not len(span) == 0) and (not any(e >= span[0] and e <= span[-1] for e in node.complement))
-
     # Additional rule for precedence
     node.frontier = node.frontier and unary_precedence_constraint(node)
-
     return node
 
 def unary_precedence_constraint(node,three_sync=False):
@@ -382,7 +422,7 @@ def unary_precedence_constraint(node,three_sync=False):
     for child in node.childs:
         if child.frontier:
             frontiers.append(child)
-    if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head]:
+    if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head] and node.e[0] == frontiers[0].e[0] and node.e[-1] == frontiers[0].e[-1]:
         if not three_sync:
             ret = False
         else:
@@ -412,7 +452,6 @@ def sent_map(span,sent):
 
 def construct_query_node(query_node,id,parent=None):
     query_node = SearchNode(query_node)
-    query_node.height = 0 if parent == None else parent.height + 1
     query_node.id = len(id)
     id.append(query_node)
     for i, child in enumerate(query_node.childs):
@@ -420,6 +459,18 @@ def construct_query_node(query_node,id,parent=None):
         query_node.childsize += 1
     return query_node
 
+def relax_not_node(query_node,id):
+    for i,child_node in enumerate(query_node.childs):
+        relax_not_node(child_node,id)
+    if query_node.label == '\+':
+        child = SearchNode(Node(CONJUNCTION))
+        child.childs = query_node.childs
+        child.id = len(id)
+        query_node.childs = [child]
+        id.append(child)
+    return query_node
+
+# Calculating Inside Variable Set
 def calculate_v(node):
     if type(node.label) == int:
         if node.label not in node.vorigin: node.vorigin.append(node.label)
@@ -434,6 +485,26 @@ def calculate_v(node):
             if var not in node.v: node.v.append(var)
     return node
 
+# Calculating Outside Variable Set
+def calculate_outside_v(node,parent_v=set()):
+    node.voutside = parent_v
+    for i, child in enumerate(node.childs):
+        vsibling = set()
+        for j, child_i in enumerate(node.childs):
+            if i != j:
+                for v in child_i.vorigin:
+                    vsibling.add(v)
+        child_outside = list(set([v for v in parent_v] + [v for v in node.vorigin] + [v for v in vsibling]))
+        node.childs[i] = calculate_outside_v(child,child_outside)
+    return node
+
+# Calculating Bound of Node (intersection of inside and outside variable)
+def calculate_bound(node):
+    node.bound = [x for x in node.v if x in node.voutside]
+    for index, child in enumerate(node.childs):
+        node.childs[index] = calculate_bound(child)
+    return node
+
 def prune_node(node):
     i = len(node.childs) - 1
     while i >= 0: 
@@ -442,20 +513,6 @@ def prune_node(node):
         else:
             node.childs[i] = prune_node(node.childs[i])
         i -= 1
-    return node
-
-def calculate_bound(node,parent_bound=set([])):
-    node.bound = [x for x in node.v if x in parent_bound] if len(node.childs) > 0 else node.vorigin
-    for index, child in enumerate(node.childs):
-        sibling_bound = filter(lambda x: x not in child.v, node.v)
-        child_set = set()
-        for child_index, y in enumerate(node.childs):
-            if child_index != index:
-                for z in y.v:
-                    child_set.add(z)
-        for v in node.vorigin:
-            child_set.add(v)
-        calculate_bound(child,child_set)
     return node
 
 def print_node_list(node):
@@ -486,13 +543,18 @@ def calculate_e(node, logic_map,aligned_word,start=True):
     node.eorigin = sorted(node.eorigin)
     return node
 
-def change_not_and_conj(node):
+def change_conj(node):
     if node.label == '': 
         node.label = CONJUNCTION
-    elif node.label == '\+':
-        node.label = NEGATION
     for (i, child) in enumerate(node.childs):
-        node.childs[i] = change_not_and_conj(child)
+        node.childs[i] = change_conj(child)
+    return node
+
+def change_not(node):
+    if node.label == '\+':
+        node.label = NEGATION
+    for (i,child) in enumerate(node.childs):
+        node.childs[i] = change_not(child)
     return node
 
 def transform_multi_words_entity(node):

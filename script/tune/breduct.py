@@ -40,6 +40,7 @@ def main():
             print "Failed to parse:",line
 
 def rename(inner, lmbd, rename_map):
+    #print "RENAMING", inner, lmbd
     lmbd_set = set(lmbd)
     number_set = set(['0','1','2','3','4','5','6','7','8','9'])
     rset = set()
@@ -56,6 +57,7 @@ def rename(inner, lmbd, rename_map):
                 ret = ret.replace(var,rename_map.generate())
                 rset.add(var)
         now = occ+1
+    #print "---> RESULT:", ret
     return ret
 
 

@@ -9,6 +9,7 @@ def main():
 
 def preprocess(line):
     line = process_single_negation(line)
+    line = line.replace('0)','ZERO)')
     return line
 
 def process_single_negation(line):

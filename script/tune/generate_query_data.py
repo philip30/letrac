@@ -62,7 +62,7 @@ def generate_query_data(input_arg,geoquery_arg,out_arg,is_gs,database):
     db_map = {}
     for line in inp:
         line = line.strip()
-        query = validate(line.replace("-","\\+ ").replace("#$#", ' '),is_gs)
+        query = validate(line.replace("-","\\+ ").replace("#$#", ' ').replace('ZERO','0')),is_gs)
         qmap = {}
         if not database or (query not in qmap and not qdatabase.exists(database,query)):
             qmap[query] = 1
