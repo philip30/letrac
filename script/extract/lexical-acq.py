@@ -492,7 +492,7 @@ def calculate_outside_v(node,parent_v=set()):
         vsibling = set()
         for j, child_i in enumerate(node.childs):
             if i != j:
-                for v in child_i.vorigin:
+                for v in child_i.v:
                     vsibling.add(v)
         child_outside = list(set([v for v in parent_v] + [v for v in node.vorigin] + [v for v in vsibling]))
         node.childs[i] = calculate_outside_v(child,child_outside)
