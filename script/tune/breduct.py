@@ -133,7 +133,8 @@ def breduct(node,rename_map):
 
     ## ERROR CHECK
     if len(lmbd) < len(node.bound):
-        raise "Error: Reduction can't process arguments more than lambda"
+        cerr << "Error: Reduction can't process arguments more than lambda" << endl
+        raise Exception("len(lambda) != len(bound) error")
 
     ## RENAMING
     # First check whether there is a variable in this node level that is not in lambda
@@ -179,13 +180,10 @@ def main():
             rename_map = defaultdict(lambda:"x_" + str(100+len(rename_map)))
             output = node_to_line(breduct(node,rename_map))
             if not check_output(output):
-                print >> sys.stderr, "This output does not have correct parentheses:", output
-                sys.exit(1)
-
+                print >> sys.stderr, "This output does not have correct parentheses:", output, "input:", line
 
             print (output if not args.alphabet else change_x_to_var(output))
         except:
-            raise
             print "Failed to parse:",line
 
 if __name__ == '__main__':

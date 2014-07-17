@@ -60,11 +60,13 @@ def generate_query_data(input_arg,geoquery_arg,out_arg,is_gs,database):
     print >> out, ""
 
     db_map = {}
+    qmap = {}
     for line in inp:
         line = line.strip()
-        query = validate(line.replace("-","\\+ ").replace("#$#", ' ').replace('ZERO','0')),is_gs)
-        qmap = {}
-        if not database or (query not in qmap and not qdatabase.exists(database,query)):
+        query = validate(line.replace("-","\\+ ").replace("#$#", ' ').replace('ZERO','0'),is_gs)
+        if line.startswith("Failed"):
+            print >> qsync, "write\tAnswer = []"
+        elif not database or (query not in qmap and not qdatabase.exists(database,query)):
             qmap[query] = 1
             print >> out, query 
             print >> out, ""

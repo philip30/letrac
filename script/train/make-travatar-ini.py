@@ -9,9 +9,7 @@ parser.add_argument('--lm_file', type=str, default="")
 parser.add_argument('--three_sync',action='store_true')
 args = parser.parse_args()
 
-
-
-feature={'parse':0.3,'lm':0.8,'psgl':0.05,'plgs':0.05,'count':0.05,'prob':0.05,'del':-1}
+feature={'parse':0.3,'lm':0.8,'psgl':0.05,'plgs':0.05,'count':0.05,'prob':0.05,'del':-1,'rule':'0.1','state_kb':'0.5','city_kb':'0.5','river_kb':0.2}
 
 def main():
     write_config('tm_file',args.tm_file)

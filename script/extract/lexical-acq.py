@@ -16,7 +16,7 @@ from geometric import query_representation
 from stop_word_list import stop_word_list as stop_word
 from find_error import check_valid_sync_symbol
 
-exclusion = set(['us'])
+exclusion = set(['us','many','much'])
 stop = [x for x in stop_word if x not in exclusion]
 
 # flag
@@ -53,8 +53,11 @@ def main():
 
     #### counter
     count = 0
+
+    #### map for validation
+    cycle_map = defaultdict(lambda:set())
     
-    fp = open("geoquery.fparse","w")
+    #fp = open("geoquery.fparse","w")
     #### For input-sentence-fol-alignment
     for (index,(inp_line,sent_line, fol_line, align_line)) in enumerate(zip(inp_file,sent_file,fol_file,align_file)):
         inp_line = inp_line.strip()
@@ -125,9 +128,10 @@ def main():
             print_node(query_node,stream=sys.stdout) 
             print_node_list(query_node)
         
-        print >> fp, print_traverse_rule(query_node)[1]
+        #print >> fp, print_traverse_rule(query_node)[1]
         rules = []
         compose_rule(rules, query_node, args.max_size)
+        check_rules(rules,cycle_map)
 
         for rule in rules:
             print extract_three_sync(rule) if args.three_sync else rule
@@ -137,6 +141,30 @@ def main():
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
+
+def check_rules(rules,mp):
+    # checking for loop 
+    for rule in rules:
+        src,trg = rule.split(" ||| ")
+        src = src.split()
+        # if it is unary
+        if len(src) == 3 and src[0][0] != '"' and src[0][-1] != '"':
+            child_symbol = src[0].split(":")[1]
+            parent_symbol = src[2]
+            if parent_symbol in mp[child_symbol]:
+                raise Exception("Error with cycle: "+ parent_symbol+ " -> " + child_symbol + "->" + parent_symbol)
+            mp[parent_symbol].add(child_symbol)
+        # check for parentheses
+        check_parentheses([" ".join(src)] + [trg])
+
+def check_parentheses(inps):
+    for inp in inps:
+        g = 0
+        for c in inp:
+            if c == '(': g+=1
+            elif c == ')': g-= 1
+        if g != 0:
+            raise Exception("Parentheses error: " + inp)
 
 # This is for debug only
 def print_traverse_rule(node):
@@ -250,7 +278,7 @@ def three_sync_frontier_marker(node,sent):
         unary = count == len(words)-1 and len(node.childs) == 1 and node.label == node.childs[0].label and len(node.bound) == len(node.childs[0].bound)
         if count == len(words) or unary:
             node.frontier = False # Merge this node
-        node.frontier = node.frontier and unary_precedence_constraint(node)
+        node.frontier = node.frontier and unary_precedence_constraint(node,True)
     return node
 
 def align_unaligned_source(node, start, end, aligned_word):
@@ -422,13 +450,9 @@ def unary_precedence_constraint(node,three_sync=False):
     for child in node.childs:
         if child.frontier:
             frontiers.append(child)
-    if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head] and node.e[0] == frontiers[0].e[0] and node.e[-1] == frontiers[0].e[-1]:
-        if not three_sync:
-            ret = False
-        else:
-            spanb1,spanb2 = (node.ekeyword[0], node.ekeyword[-1])
-            spanc1,spanc2 = (frontiers[0].ekeyword[0], frontiers[0].ekeyword[-1])
-            ret = not ((spanb1 == spanc1) and (spanc1 == spanc2))
+    if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head]:
+        if three_sync or node.e[0] == frontiers[0].e[0] and node.e[-1] == frontiers[0].e[-1]:
+                ret = False
     return ret
 
 def sent_map(span,sent):
