@@ -5,7 +5,7 @@ import argparse
 import qdatabase
 
 MAX_VAR = 14
-DELAY = 21000
+DELAY = 45000
 OMIT_SET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[MAX_VAR:])
 
 def validate(line,gs):
@@ -25,8 +25,8 @@ def validate(line,gs):
     
     if len(ret) > 1 and ret[-1] == '.': ret = ret[:-1]
 
-    if any(x in OMIT_SET for x in ret):
-        ret = 'stateid(omit)?'
+    #if any(x in OMIT_SET for x in ret):
+    #    ret = 'stateid(omit)?'
 
     if gs: 
         return ret + "."
@@ -65,7 +65,7 @@ def generate_query_data(input_arg,geoquery_arg,out_arg,is_gs,database):
         line = line.strip()
         query = validate(line.replace("-","\\+ ").replace("#$#", ' ').replace('ZERO','0'),is_gs)
         if line.startswith("Failed"):
-            print >> qsync, "write\tAnswer = []"
+            print >> qsync, "write\tAnswer = [Failed]"
         elif not database or (query not in qmap and not qdatabase.exists(database,query)):
             qmap[query] = 1
             print >> out, query 

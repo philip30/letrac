@@ -3,7 +3,11 @@
 import sys
 import time
 import os
+import hashlib 
+from collections import defaultdict
 
+MAX_TRIES = 20
+QUERY_MAP = defaultdict(lambda x:str(hashlib.sha224(x).hexdigest()))
 def main():
     init(sys.argv[1])
 
@@ -14,11 +18,11 @@ def init(loc):
         os.makedirs(loc)
 
 def build_path(loc,query):
-    return loc + '/' + str(hash(query))
+    return loc + '/' + QUERY_MAP[query]
 
 def strip_query(query):
     if query.startswith("time_out("):
-        query = query[9:]
+        query = query[len("time_out("):]
         i = query.find('(') + 1
         depth = 1
         while (depth != 0):
@@ -49,10 +53,14 @@ def write(loc,query,result):
         f.close()
     return 0
 
-def read(loc,query):
+def read(loc,query,default="Answer = [ReadingTimeOut]"):
     query = strip_query(query)
+    tries = 0
     while not exists(loc,query):
         print >> sys.stderr, "Waiting for",build_path(loc,query)
+        tries += 1
+        if tries == MAX_TRIES:
+            return default
         time.sleep(1)
     f = open(build_path(loc,query),"r")
     line1 = f.readline().strip()
@@ -66,6 +74,5 @@ def read(loc,query):
     f.close()
     return ret
     
-
 if __name__ == '__main__':
     main()
