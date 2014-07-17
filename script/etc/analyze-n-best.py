@@ -51,4 +51,4 @@ for n, (gs_line, gsq_line,sent_line) in enumerate(zip(gs_fp,gs_q,sent)):
     for i in item[n]:
         print "       ", i
 
-print "Repairable", float(g) / (len(k) / 2)
+print "Oracle Score:", float(g) / (len(k) / 2)

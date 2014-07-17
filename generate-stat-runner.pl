@@ -81,7 +81,6 @@ sub stat_gen {
     print STDERR "$dir execution is done.\n";
 }
 
-
 sub safesystem {
   print STDERR "Executing: @_\n";
   system(@_);
