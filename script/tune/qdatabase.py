@@ -4,10 +4,8 @@ import sys
 import time
 import os
 import hashlib 
-from collections import defaultdict
 
 MAX_TRIES = 20
-QUERY_MAP = defaultdict(lambda x:str(hashlib.sha224(x).hexdigest()))
 def main():
     init(sys.argv[1])
 
@@ -18,17 +16,12 @@ def init(loc):
         os.makedirs(loc)
 
 def build_path(loc,query):
-    return loc + '/' + QUERY_MAP[query]
+    return loc + '/' + str(hashlib.sha224(query).hexdigest())
 
 def strip_query(query):
     if query.startswith("time_out("):
         query = query[len("time_out("):]
-        i = query.find('(') + 1
-        depth = 1
-        while (depth != 0):
-            if query[i] == '(': depth += 1
-            elif query[i] == ')':depth -= 1
-            i+= 1
+        i = query.rfind("),")
         query = query[:i]
     return query
 

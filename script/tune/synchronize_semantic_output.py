@@ -8,7 +8,7 @@ import qdatabase
 err = [];
 out = [];
 EMPTY_ANSWER = "Answer = []"
-
+FAIL_ANSWER = "Answer = [Failed]"
 parser = argparse.ArgumentParser()
 parser.add_argument('--log_file', type=str)
 parser.add_argument('--output_file', type=str)
@@ -16,7 +16,7 @@ parser.add_argument('--database_dir', type=str)
 parser.add_argument('--sync', type=str)
 args = parser.parse_args()
 
-def print_answer(answer,query):
+def print_answer(answer,query,succ=False):
     if args.database_dir:
         qdatabase.write(args.database_dir,query,answer)
     print answer
@@ -42,20 +42,20 @@ for line in sy_file:
             print >> sys.stderr, "Error pointer goes out of bounds"
             sys.exit(1)
         if err[ep].startswith('Res = success ?'):
-            print_answer(out[op].strip(),query)
+            print_answer(out[op].strip(),query,True)
             op += 1
             ep += 2
         elif err[ep].startswith('Res = time_out ?'):
-            print_answer(EMPTY_ANSWER,query)
+            print_answer(FAIL_ANSWER,query,True)
             ep += 2
         elif err[ep].startswith('! Existence') or err[ep].startswith('! Domain') or err[ep].startswith('! Type'):
-            print_answer(EMPTY_ANSWER,query)
+            print_answer(FAIL_ANSWER,query)
             ep += 3
         elif err[ep].startswith('! Inst'):
-            print_answer(EMPTY_ANSWER,query)
+            print_answer(FAIL_ANSWER,query)
             ep += 2
         elif re.match('[A-Z] = ',err[ep]):
-            print_answer(EMPTY_ANSWER,query)
+            print_answer(FAIL_ANSWER,query)
             if err[ep].endswith('?'): 
                 ep += 3
             else:
@@ -64,14 +64,14 @@ for line in sy_file:
                     k+=1
                 ep += 2 + k
         elif err[ep].startswith('no'):
-            print_answer(EMPTY_ANSWER,query)
+            print_answer(FAIL_ANSWER,query)
             ep += 1
         elif err[ep].startswith('yes'):
-            print_answer(out[op].strip(),query)
+            print_answer(out[op].strip(),query,True)
             op += 1
             ep += 1
         elif err[ep].startswith('! Syntax'):
-            print_answer(EMPTY_ANSWER,query)
+            print_answer(FAIL_ANSWER,query)
             ep += 6
             #ep += (6 if not err[ep+1].startswith("! ) cannot start") else 5)
         else:

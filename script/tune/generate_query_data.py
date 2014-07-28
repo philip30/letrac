@@ -66,7 +66,7 @@ def generate_query_data(input_arg,geoquery_arg,out_arg,is_gs,database):
         query = validate(line.replace("-","\\+ ").replace("#$#", ' ').replace('ZERO','0'),is_gs)
         if line.startswith("Failed"):
             print >> qsync, "write\tAnswer = [Failed]"
-        elif not database or (query not in qmap and not qdatabase.exists(database,query)):
+        elif not database or not qdatabase.exists(database,query):
             qmap[query] = 1
             print >> out, query 
             print >> out, ""

@@ -13,11 +13,7 @@ from geometric import change_var_to_x
 from geometric import str_logical_rule
 from geometric import kruskal
 from geometric import query_representation
-from stop_word_list import stop_word_list as stop_word
-from find_error import check_valid_sync_symbol
-
-exclusion = set(['us','many','much'])
-stop = [x for x in stop_word if x not in exclusion]
+from stop_word_list import stop_word_list as stop
 
 # flag
 QUERY = "QUERY"
@@ -131,6 +127,7 @@ def main():
         #print >> fp, print_traverse_rule(query_node)[1]
         rules = []
         compose_rule(rules, query_node, args.max_size)
+        rules = map(lambda x:rename_non_terminal(x,False),rules)
         check_rules(rules,cycle_map)
 
         for rule in rules:
@@ -198,7 +195,7 @@ def compose_rule(rules,node, max_size):
         for c,size in composed:
             ret.append((c,size))
     for r,size in ret:
-        rules.append(rename_non_terminal(r))
+        rules.append(r)
     return ret
 
 def compose_rule_string(nt, parent, child):
@@ -214,7 +211,7 @@ def compose_rule_string(nt, parent, child):
                 p_col_token[i] = replace_x_with_y(' '.join(c_col_token[:-2]),nt)
                 break
         ret.append(' '.join(p_col_token))
-    return ' ||| '.join(ret)
+    return ' ||| '.join(map(lambda x: rename_non_terminal(x),ret))
 
 def replace_x_with_y(ss,index):
     # to avoid conflict in merging, rename x in child first into y, resolve later into new x
@@ -225,10 +222,20 @@ def replace_x_with_y(ss,index):
             ss[i] = str(index)+ ss[i][1:]
     return ' '.join(ss)
 
-def rename_non_terminal(c):
+def rename_non_terminal(c,xFixed = True):
     nt_map = {}
+    fixed = set()
     parts = c.split(" ||| ")
     ret = []
+    ctr = 0
+
+    # Mark all remaining X, don't change it.
+    if xFixed:
+        for token in parts[0].split():
+            if token[0] == 'x':
+                nt_map[token[:2]] = token[:2]
+                fixed.add(int(token[1]))
+    
     for part in parts:
         tokens = part.split()
         for i, token in enumerate(tokens):
@@ -236,8 +243,11 @@ def rename_non_terminal(c):
             if token[0] != '"' and token[-1] != '"':
                 t = token[:2]
                 if t not in nt_map:
-                    nt_new = 'x' + str(len(nt_map))
+                    while ctr in fixed:
+                        ctr += 1
+                    nt_new = 'x' + str(ctr)
                     nt_map[t] = nt_new
+                    ctr += 1
                 tokens[i] = nt_map[t] + token[2:]
         ret.append(' '.join(tokens))
     return ' ||| '.join(ret)
@@ -275,7 +285,7 @@ def three_sync_frontier_marker(node,sent):
                 w = w[1:-1]
                 if w in stop:
                     count += 1
-        unary = count == len(words)-1 and len(node.childs) == 1 and node.label == node.childs[0].label and len(node.bound) == len(node.childs[0].bound)
+        unary = (count == (len(words)-1) and len(node.childs) == 1 and node.label == node.childs[0].label)# and len(node.bound) == len(node.childs[0].bound))
         if count == len(words) or unary:
             node.frontier = False # Merge this node
         node.frontier = node.frontier and unary_precedence_constraint(node,True)

@@ -115,7 +115,7 @@ def node_to_line(node):
         if i != 0:
             ret += ","
         ret += node_to_line(child)
-    if len(node.childs) != 0: ret += correspond[node.type]
+    if node.type in correspond and node.type != '': ret += correspond[node.type]
     return ret
 
 ### B-REDUCTION
