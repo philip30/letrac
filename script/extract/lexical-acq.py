@@ -131,7 +131,9 @@ def main():
         check_rules(rules,cycle_map)
 
         for rule in rules:
-            print extract_three_sync(rule) if args.three_sync else rule
+            r = extract_three_sync(rule) if args.three_sync else rule
+            if r != None:
+                print r
         if (args.verbose):print '----------------------------------------------------------------------------'
     #### Closing all files
     map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file,rule_out_file])
@@ -285,7 +287,7 @@ def three_sync_frontier_marker(node,sent):
                 w = w[1:-1]
                 if w in stop:
                     count += 1
-        unary = (count == (len(words)-1) and len(node.childs) == 1 and node.label == node.childs[0].label)# and len(node.bound) == len(node.childs[0].bound))
+        unary = (count == (len(words)-1) and len(node.frontier_child) == 1 and node.head == node.frontier_child[0].head)# and len(node.bound) == len(node.childs[0].bound))
         if count == len(words) or unary:
             node.frontier = False # Merge this node
         node.frontier = node.frontier and unary_precedence_constraint(node,True)
@@ -647,7 +649,10 @@ def extract_three_sync(rule):
         else:
             left.append(word)
 
+    if len(left) == 3 and left[0][3:] == left[2]:
+        return None
     if len(left) == 2: left.insert(0,"")
+
     rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
     return rule
 

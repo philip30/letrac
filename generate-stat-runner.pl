@@ -9,7 +9,7 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PREFIX,$DATABASE_DIR,$SICSTUS_LOCATION,$GEOQUERY_LOCATION,$LETRAC,$REF,$OUTPUT);
+my ($PREFIX,$DATABASE_DIR,$SICSTUS_LOCATION,$GEOQUERY_LOCATION,$LETRAC,$REF,$OUTPUT, $KEEP_SPLIT);
 my $LETRAC=".";
 my $THREADS=28;
 my $TUNE_FACTOR=0;
@@ -23,6 +23,7 @@ GetOptions(
     "tune-factor=i" => \$TUNE_FACTOR,
     "threads=s"=> \$THREADS,
     "database-dir=s" => \$DATABASE_DIR, 
+    "keep-split!" => \$KEEP_SPLIT,
 );
 
 my $lines=0;
@@ -36,7 +37,7 @@ my $lines=int(ceil($lines/$THREADS));
 my $split_dir = "$PREFIX\_split";
 safesystem("rm -rf $split_dir") if (-d $split_dir);
 safesystem("mkdir $split_dir") or die;
-safesystem("$LETRAC/script/tune/split_factor.py $TUNE_FACTOR $PREFIX.uniq > $PREFIX.uniq.factor");
+safesystem("$LETRAC/script/tune/split_factor.py $TUNE_FACTOR $PREFIX.uniq > $PREFIX.uniq.factor 2> $PREFIX.paraphrase");
 safesystem("split $PREFIX.uniq.factor -l $lines $split_dir/file -d") or die;
 safesystem("ls $split_dir");
 sleep(0.5);
@@ -57,6 +58,9 @@ closedir(DIR);
 # REDUCE
 for my $data (qw(qdata reduct n geoquery.log semout semout.sync query)) {
     safesystem("cat $split_dir/file*.$data > $PREFIX.$data");
+}
+if (not $KEEP_SPLIT) {
+    safesystem("rm -rf $split_dir");
 }
 safesystem("$LETRAC/script/tune/generate_stat_data.py --gs $REF --semout $PREFIX.semout.sync --n $PREFIX.n > $OUTPUT") or die;
 
