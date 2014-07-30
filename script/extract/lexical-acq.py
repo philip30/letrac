@@ -45,7 +45,6 @@ def main():
     sent_file = open(args.sent,'r')
     fol_file = open(args.fol,'r')
     align_file = open(args.align,'r')
-    rule_out_file = open(args.out_num_rule,'w')
 
     #### counter
     count = 0
@@ -123,7 +122,7 @@ def main():
             print index, "|||",  sent_line.strip()
             print_node(query_node,stream=sys.stdout) 
             print_node_list(query_node)
-        
+
         #print >> fp, print_traverse_rule(query_node)[1]
         rules = []
         compose_rule(rules, query_node, args.max_size)
@@ -131,12 +130,12 @@ def main():
         check_rules(rules,cycle_map)
 
         for rule in rules:
-            r = extract_three_sync(rule) if args.three_sync else rule
+            r = extract_three_sync(rulei, args.shuffle) if args.three_sync else rule
             if r != None:
                 print r
         if (args.verbose):print '----------------------------------------------------------------------------'
     #### Closing all files
-    map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file,rule_out_file])
+    map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
 
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
@@ -626,14 +625,9 @@ def parse_argument():
     parser.add_argument('--sent',type=str,required=True,help="The sentence file")
     parser.add_argument('--fol',type=str,required=True,help="The sentence file in fol")
     parser.add_argument('--align',type=str,required=True,help="The alignment between sent to fol")
-    parser.add_argument('--out_num_rule',type=str,required=True,help="The output file where number of rules from each line is extracted.")
     parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
     parser.add_argument('--three_sync',action="store_true",help="Extract 3-synchronous grammar.")
-    parser.add_argument('--include_fail',action="store_true",help="Include (partially) extracted rules even it is failed to extract until root.")
     parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
-    parser.add_argument('--void_span', action="store_true",help="Give void span to unaligned words.")
-    parser.add_argument('--bare_rule', action="store_true",help="print rule independently.")
-    parser.add_argument('--no_expand', action="store_true",help="Do not permute all the merging.")
     parser.add_argument('--max_size', type=int, default=4,help="Compose max size")
     return parser.parse_args()
 

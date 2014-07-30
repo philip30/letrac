@@ -76,7 +76,7 @@ exit(0) if $LAST_STEP eq "align";
 
 safesystem("mkdir $WORKING_DIR/model");
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --out_num_rule $WORKING_DIR/data/$file_name.nextract --input $WORKING_DIR/data/$file_name.preprocess --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
+my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --input $WORKING_DIR/data/$file_name.preprocess --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --include_fail" if $INCLUDE_FAIL;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
