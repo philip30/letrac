@@ -130,7 +130,7 @@ def main():
         check_rules(rules,cycle_map)
 
         for rule in rules:
-            r = extract_three_sync(rulei, args.shuffle) if args.three_sync else rule
+            r = extract_three_sync(rule) if args.three_sync else rule
             if r != None:
                 print r
         if (args.verbose):print '----------------------------------------------------------------------------'

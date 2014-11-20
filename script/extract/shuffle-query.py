@@ -35,6 +35,13 @@ with open(sys.argv[1],"r") as kbs:
             prefixadd(lake_name + "lake")
 prefixadd("united states")
 
+def parse_geo(str):
+    print str
+    a = str.find("]") + 2
+    k = str[str.find("["):str.find("]")][1:]
+    j = str[a:][:-2]
+    return j,k
+
 def shuffle_query(q):
     l = []
     i = 0
@@ -57,12 +64,7 @@ def shuffle_query(q):
 
 with open(sys.argv[2],"r") as qbs:
     for line in qbs:
-        line = line.strip().split(" ||| ")
-        line[0] = line[0].split(" ")
-        label = line[0][-2:]
-        line[0] = line[0][:-2]
-        line[0] = map(lambda x: x[1:-1] if x[0] == '"' and x[-1] == '"' else x, line[0])
-        line[0] = shuffle_query(line[0])
-        line[0] = ' '.join(map(lambda x: '"' + x +'"' if ":" not in x else x, line[0])+label)
-        print " ||| ".join(line)
+        line = line.strip().split()
+        query = shuffle_query(line)
+        print " ".join(query)
 

@@ -18,7 +18,6 @@ def main():
     write_config('delete_unknown','true')
     write_config('tm_storage','fsm')
     write_config('root_symbol','QUERY')
-    write_config('default_symbol','FORM')
     write_config('trg_factors','2' if args.three_sync else '1')
 
     if args.lm_file != "":

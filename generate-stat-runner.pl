@@ -60,7 +60,7 @@ for my $data (qw(qdata reduct n geoquery.log semout semout.sync query)) {
     safesystem("cat $split_dir/file*.$data > $PREFIX.$data");
 }
 if (not $KEEP_SPLIT) {
-    safesystem("rm -rf $split_dir");
+    #safesystem("rm -rf $split_dir");
 }
 safesystem("$LETRAC/script/tune/generate_stat_data.py --gs $REF --semout $PREFIX.semout.sync --n $PREFIX.n > $OUTPUT") or die;
 

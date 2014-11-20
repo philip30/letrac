@@ -9,8 +9,9 @@ binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
 my ($PIALIGN_DIR, $WORKING_DIR, $NO_EXPAND, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP, $INCLUDE_FAIL);
-my ($VOID_SPAN, $BARE_RULE, $THREE_SYNC, $MAX_SIZE,$ALIGN,$MANUAL);
+my ($VOID_SPAN, $BARE_RULE, $THREE_SYNC, $MAX_SIZE,$ALIGN,$MANUAL,$SHUFFLE);
 my $MAX_SIZE = "4";
+my $KB="/project/nakamura-lab03/Work/philip-a/data/geoquery/geobase.kb";
 
 GetOptions(
     # Necessary
@@ -30,6 +31,7 @@ GetOptions(
     "force!" => \$FORCE,
     "align=s" => \$ALIGN,
     "manual=s" => \$MANUAL,
+    "shuffle!" => \$SHUFFLE,
 );
 
 ### START HERE
@@ -53,6 +55,10 @@ safesystem("$LETRAC_DIR/script/extract/input_preprocess.py < $INPUT > $WORKING_D
 my $manual = $MANUAL ? " --manual $MANUAL" : "";
 safesystem("$LETRAC_DIR/script/extract/align-gen.py$manual --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $WORKING_DIR/data/$file_name.preprocess") or die "Failed on creating input for alignment";
 safesystem("$LETRAC_DIR/script/extract/swr.py < $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.kword") if ($THREE_SYNC);
+if ($SHUFFLE) {
+    #safesystem("$LETRAC_DIR/script/extract/shuffle-query.py $KB $WORKING_DIR/data/$file_name.kword > $WORKING_DIR/data/temp.txt") or die;
+    #safesystem("mv $WORKING_DIR/data/temp.txt $WORKING_DIR/data/$file_name.kword");
+}
 exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
