@@ -39,7 +39,6 @@ def change_x_to_var(l):
 correspond = {'':'.', '(':')', '[':']', '{':'}'}
 corr_val = set(correspond.values())
 key_val = set(correspond.keys())
-
 class Node:
     def __init__(self, label,id):
         self.label = label
@@ -69,7 +68,6 @@ def extract(line,position=0,parent="",id=0):
             sys.exit(1)
         if nchar in key_val:
             child_content = Node(line[offset:position].strip(),id)
-            id += 1
             child_content.type = nchar
             (child_content.childs, position) = extract(line, position+1, nchar,id)
             childs.append(child_content)
@@ -118,8 +116,17 @@ def node_to_line(node):
     if node.type in correspond and node.type != '': ret += correspond[node.type]
     return ret
 
+def breduct(line,alphabet=True):
+    node = append_bound(extract(line + ".")[0][0])
+    rename_map = defaultdict(lambda:"x_" + str(100+len(rename_map)))
+    output = node_to_line(breductexec(node,rename_map))
+    if not check_output(output):
+        print >> sys.stderr, "This output does not have correct parentheses:", output, "input:", line
+
+    return (output if not alphabet else change_x_to_var(output))
+
 ### B-REDUCTION
-def breduct(node,rename_map):
+def breductexec(node,rename_map):
     ## GET lambda information
     lmbd = []
     if node.label.startswith("\\"):
@@ -164,7 +171,7 @@ def breduct(node,rename_map):
 
     # Recursing to the child
     for child in node.childs:
-        breduct(child,rename_map)
+        breductexec(child,rename_map)
     return node 
 
 ### MAIN
@@ -174,16 +181,11 @@ def main():
     args = parser.parse_args()
 
     for line in sys.stdin:
-        line = line.strip() + '.'
-        try :
-            node = append_bound(extract(line)[0][0])
-            rename_map = defaultdict(lambda:"x_" + str(100+len(rename_map)))
-            output = node_to_line(breduct(node,rename_map))
-            if not check_output(output):
-                print >> sys.stderr, "This output does not have correct parentheses:", output, "input:", line
-
-            print (output if not args.alphabet else change_x_to_var(output))
-        except:
+        line = line.strip()
+        out = breduct(line,args.alphabet)
+        if out is not None:
+            print out
+        else:
             print "Failed to parse:",line
 
 if __name__ == '__main__':
