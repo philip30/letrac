@@ -1,5 +1,4 @@
 import sys
-import disjointset as ds
 from collections import defaultdict
 
 correspond = {'':'.', '(':')', '[':']', '{':'}'}
@@ -142,15 +141,4 @@ def transform_into_rule(rules,node,start=False,recurse=True,depth=0):
 def str_logical_rule(label,depth):
     return label.replace("'",'').replace(" ","_")+str(depth)
 
-# Return the MST according to kruskal algorithm
-def kruskal(vertices,edges):
-    mst = defaultdict(lambda:([]))
-    v = []
-    for i in vertices:
-        v.append(ds.make_set(i))
-    for (i,j,weight) in sorted(edges,key=lambda x:x[2]):
-        if ds.find(v[i]) != ds.find(v[j]):
-            mst[i].append(j)
-            mst[j].append(i)
-            ds.union(v[i],v[j])
-    return mst
+

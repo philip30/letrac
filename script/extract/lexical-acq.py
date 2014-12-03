@@ -11,9 +11,7 @@ from geometric import Node
 from geometric import SearchNode
 from geometric import change_var_to_x
 from geometric import str_logical_rule
-from geometric import kruskal
 from geometric import query_representation
-from stop_word_list import stop_word_list as stop
 
 # flag
 QUERY = "QUERY"
@@ -112,11 +110,6 @@ def main():
         
         lexical_acq(query_node,sent,[],args.merge_unary)
         
-        if args.three_sync:
-            query_node = calculate_e_key(query_node,sent)
-            query_node = three_sync_frontier_marker(query_node,sent)
-            lexical_acq(query_node,sent,[],args.merge_unary) 
-        
         count += 1
         if (args.verbose):
             print index, "|||",  sent_line.strip()
@@ -130,7 +123,7 @@ def main():
         check_rules(rules,cycle_map)
 
         for rule in rules:
-            r = extract_three_sync(rule) if args.three_sync else rule
+            r = rule
             if r != None:
                 print r
         if (args.verbose):print '----------------------------------------------------------------------------'
@@ -253,14 +246,6 @@ def rename_non_terminal(c,xFixed = True):
         ret.append(' '.join(tokens))
     return ' ||| '.join(ret)
 
-def calculate_e_key(node, sent):
-    for child in node.childs:
-        calculate_e_key(child,sent)
-    for e in node.e:
-        if sent[e] not in stop:
-            node.ekeyword.append(e)
-    return node
-
 def mark_nt(node,parent=None):
     for child in node.childs:
         mark_nt(child,node)
@@ -274,23 +259,6 @@ def mark_nt(node,parent=None):
             node.head = LEAF
     return node
 
-def three_sync_frontier_marker(node,sent):
-    for child in node.childs:
-        three_sync_frontier_marker(child,sent)
-    if node.frontier:
-        words_head = node.result.split(" ||| ")[0].split()
-        words = words_head[:-2]
-        count = 0
-        for w in words:
-            if w[0] == '"' and w[-1] == '"':
-                w = w[1:-1]
-                if w in stop:
-                    count += 1
-        unary = (count == (len(words)-1) and len(node.frontier_child) == 1 and node.head == node.frontier_child[0].head)# and len(node.bound) == len(node.childs[0].bound))
-        if count == len(words) or unary:
-            node.frontier = False # Merge this node
-        node.frontier = node.frontier and unary_precedence_constraint(node,True)
-    return node
 
 def align_unaligned_source(node, start, end, aligned_word):
     child_spans = set(node.eorigin)
@@ -454,7 +422,7 @@ def mark_frontier_node(node, complement_span):
     node.frontier = node.frontier and unary_precedence_constraint(node)
     return node
 
-def unary_precedence_constraint(node,three_sync=False):
+def unary_precedence_constraint(node):
     ret = True
     # For all child
     frontiers = []
@@ -462,8 +430,8 @@ def unary_precedence_constraint(node,three_sync=False):
         if child.frontier:
             frontiers.append(child)
     if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head]:
-        if three_sync or node.e[0] == frontiers[0].e[0] and node.e[-1] == frontiers[0].e[-1]:
-                ret = False
+        if node.e[0] == frontiers[0].e[0] and node.e[-1] == frontiers[0].e[-1]:
+            ret = False
     return ret
 
 def sent_map(span,sent):
@@ -626,29 +594,9 @@ def parse_argument():
     parser.add_argument('--fol',type=str,required=True,help="The sentence file in fol")
     parser.add_argument('--align',type=str,required=True,help="The alignment between sent to fol")
     parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
-    parser.add_argument('--three_sync',action="store_true",help="Extract 3-synchronous grammar.")
     parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
     parser.add_argument('--max_size', type=int, default=4,help="Compose max size")
     return parser.parse_args()
-
-# 3 Synch Grammar
-def extract_three_sync(rule):
-    line = rule.split(" ||| ")
-    left = []
-    for word in line[0].split():
-        if word[0] == '"' and word[-1] == '"':
-            wordi = word[1:-1]
-            if  wordi not in stop:
-                left.append(word)
-        else:
-            left.append(word)
-
-    if len(left) == 3 and left[0][3:] == left[2]:
-        return None
-    if len(left) == 2: left.insert(0,"")
-
-    rule =  "%s ||| %s |COL| %s" % (' '.join(left),line[0], line[1])
-    return rule
 
 if __name__ == "__main__":
     main()

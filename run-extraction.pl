@@ -10,19 +10,18 @@ binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
-my ($PIALIGN_DIR, $WORKING_DIR, $NO_EXPAND, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP);
+my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP);
 my ($THREE_SYNC, $MAX_SIZE,$ALIGN,$MANUAL);
 my $MAX_SIZE = "4";
 
 GetOptions(
     # Necessary
-    "letrac-dir=s" => \$LETRAC_DIR,
-    "pialign-dir=s" => \$PIALIGN_DIR,
+    "letrac=s" => \$LETRAC_DIR,
+    "pialign=s" => \$PIALIGN_DIR,
     "working-dir=s" => \$WORKING_DIR,
     "input-file=s" => \$INPUT,
     # Option
     "last-step=s" => \$LAST_STEP,
-    "three-sync"=> \$THREE_SYNC,
     "verbose!" => \$VERBOSE,
     "merge-unary!" => \$MERGE_UNARY,
     "max-size=s" => \$MAX_SIZE,
@@ -67,22 +66,15 @@ if (not $ALIGN) {
 } 
 
 # Visualizing alignment
-safesystem("$LETRAC_DIR/script/extract/cut-line.py $WORKING_DIR/data/$file_name.fol.gin $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.fol.visin");
+safesystem("head -\$(wc -l $WORKING_DIR/data/$file_name.sent) $WORKING_DIR/data/$file_name.fol.gin > $WORKING_DIR/data/$file_name.fol.visin");
 safesystem("$LETRAC_DIR/script/extract/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $ALIGN 2 1 > $WORKING_DIR/align/align.vis");
 exit(0) if $LAST_STEP eq "align"; 
-
-# Make it isomorphic
-#safesystem("mkdir $WORKING_DIR/iso");
-#safesystem("$LETRAC_DIR/script/extract/make-isomorphic.py --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --input $WORKING_DIR/data/$file_name.preprocess --out $WORKING_DIR/iso/$file_name.ism");
-#exit(0) if $LAST_STEP eq "isomorph"; 
-
 
 safesystem("mkdir $WORKING_DIR/model");
 # lexical-acquisition
 my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --input $WORKING_DIR/data/$file_name.preprocess --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
-$lex_command .= " --three_sync" if $THREE_SYNC;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
 safesystem($lex_command);
 
