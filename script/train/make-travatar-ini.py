@@ -7,6 +7,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--tm_file', type=str, required=True)
 parser.add_argument('--lm_file', type=str, default="")
 parser.add_argument('--trg_factors',type=int, default=1)
+parser.add_argument('--one_feat', type=int, default=0)
 args = parser.parse_args()
 
 feature={'lm':0.8,\
@@ -14,6 +15,8 @@ feature={'lm':0.8,\
         'plgs':0.05,\
         'count':0.05,\
         'del_rule':-1,\
+        'parse':0.2, \
+        'prob': 0.05, \
         'p':'-0.5',\
         'state_kb':'0.5',\
         'city_kb':'0.5',\
@@ -47,4 +50,6 @@ for weight_key, weight_val in feature.items():
     if weight_key != "lm" or args.lm_file != "": 
         print weight_key + "=" + str(weight_val)
 
+for i in range(args.one_feat):
+    print "r%d=%f" % (i, 0.05)
 

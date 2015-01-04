@@ -288,7 +288,7 @@ def lexical_acq(node,sent,rules,merge_unary=False):
     if node.frontier:
         node.frontier_child = {}
         sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary,{},[False] * len(sent))
-        logic = merge_logic_output(logic)
+        #logic = merge_logic_output(logic)
         res = sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound)
         node.result = res
         rules.append(res)
@@ -342,18 +342,25 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
         #logic_list.insert(node.voriginfo[vor],vor)
 
     # Logic string
-    logic = '%s "%s' % (bound_to_lambda(node.bound_remap),select_label(node.label))
+    logic = bound_to_lambda(node.bound_remap)
+    label = select_label(node.label)
+    if len(label) != 0:
+        logic += ' "%s"' % (label)
+    
     if len(logic_list) != 0:
-        logic += '(" '
+        logic += ' "(" '
         for i, item in enumerate(logic_list):
             if type(item) == int:
-                logic += '"x' + str(item) + (',' if i < len(logic_list)-1 else "") + '"'
+                logic += '"x' + str(item) + '"'
+                if i < len(logic_list) - 1:
+                    logic += ' "," '
             else:
                 log, log_bound = item
                 logic += '%s %s %s' % (log, bound_to_string(log_bound), ("\",\"" if i < len(logic_list)-1 else ""))
             logic += " " if len(logic) > 0 and logic[-1] != " " else ""
-        logic += '")'
-    logic += '"'
+        logic += ' ")" '
+    #logic += '"'
+    
     return (sent_list if not start else (' '.join([x[2] for x in sorted(sent_list,key=lambda x:x[0])])),\
             (logic,bound_remapping(node.bound,bound_map)))
 
@@ -429,7 +436,7 @@ def unary_precedence_constraint(node):
     for child in node.childs:
         if child.frontier:
             frontiers.append(child)
-    if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head]:
+    if len(frontiers) == 1 and PRECEDENCE[node.head] <= PRECEDENCE[frontiers[0].head]:  
         if node.e[0] == frontiers[0].e[0] and node.e[-1] == frontiers[0].e[-1]:
             ret = False
     return ret

@@ -47,6 +47,9 @@ class Node:
         self.bound = []
         self.id = id
 
+    def __str__(self):
+        return self.label + "(" + str(self.id) + ")" + " "+ ",".join(self.bound) +""
+
 def print_node(n,indent=0,stream=sys.stderr):
     n_child = len(n.childs)
     for i in range (n_child/2):
@@ -68,6 +71,7 @@ def extract(line,position=0,parent="",id=0):
             sys.exit(1)
         if nchar in key_val:
             child_content = Node(line[offset:position].strip(),id)
+            id += 1
             child_content.type = nchar
             (child_content.childs, position) = extract(line, position+1, nchar,id)
             childs.append(child_content)
@@ -181,7 +185,7 @@ def main():
     args = parser.parse_args()
 
     for line in sys.stdin:
-        line = line.strip()
+        line = line.strip().replace(" ","")
         out = breduct(line,args.alphabet)
         if out is not None:
             print out

@@ -13,6 +13,9 @@ class Node:
         self.childs = []
         self.type = ""
 
+    def __str__(self):
+        print self.label
+
 class SearchNode:
     def __init__(self, node):
         self.id = 0
