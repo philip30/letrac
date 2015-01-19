@@ -102,6 +102,7 @@ def main():
         
         # aligning unaligned word in the source side, it is aligned to the topmost node
         query_node,_ = align_unaligned_source(query_node,0,len(sent)-1,aligned_word)
+        
         # frontier node   
         query_node = mark_frontier_node(query_node,set())
         
@@ -251,7 +252,10 @@ def mark_nt(node,parent=None):
         mark_nt(child,node)
     if len(node.childs) == 0:
         if parent is not None and parent.label.endswith("id"):
-            if len(node.label) < 3:
+            tmp = node.label 
+            if tmp[0] == "'" and tmp[-1] == "'":
+                tmp = tmp[1:-1]
+            if len(tmp) < 3:
                 node.head = ABREVIATION
             else:
                 node.head = parent.label[:-2].upper()

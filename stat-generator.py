@@ -2,18 +2,21 @@
 
 import sys
 import argparse
-import time
-import script.tune.qdatabase as database
 import threading
-from multiprocessing import Pool, Process, Lock
-from subprocess import Popen, PIPE
+import signal
+import math
+from script.tune.qdatabase import MySql
 from script.tune.breduct import breduct as beta_reduction
 from script.tune.typecheck import typecheck as type_check
+from contextlib import contextmanager
+from multiprocessing import Pool, Process, Lock
+from subprocess import Popen, PIPE
 
-TIMEOUT=60 # second
+TIMEOUT = 60 # second
 BAD_QUERY = "Answer = [BadQuery]"
 EMPTY_RESULT = "Answer = [EmptyResult]"
 TIMEOUT_RESULT = "Answer = [Timeout]"
+stderr_lock = Lock()
 
 # Arguments
 parser = argparse.ArgumentParser(description="Stat Generator")
@@ -24,12 +27,34 @@ parser.add_argument('-input', type=str, required=True)
 parser.add_argument('-trg_factors', type=int, required=True)
 parser.add_argument('-geoquery', type=str, required=True)
 parser.add_argument('-ref', type=str, required=True)
-parser.add_argument('-database', type=str, required=True)
+parser.add_argument('-database_config', type=str)
+parser.add_argument('-time', type=str, required=True)
 parser.add_argument('-timeout', type=int, default=60)
+parser.add_argument('-driver_function', type=str, default="execute_query")
 args = parser.parse_args()
 
 TIMEOUT = args.timeout
-database.init(args.database)
+
+# Decomposing File Input
+cols = args.input.split("/")
+parent_dir, file_name = "/".join(cols[:-1]), cols[-1]
+stripped_fname = ".".join(file_name.split(".")[:-1])
+
+# Database preparation
+database = MySql(args.database_config)
+
+# Some Intermediate result output path
+nbest_path = args.input
+breduct_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".reduct"
+typecheck_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".typecheck"
+empty_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".empty" 
+result_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".result"
+
+typecheck_log = open(parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".typecheck.log", 'w')
+
+# Global Data Structure
+gold_standard = []
+time = []
 
 def malformed_answer(q):
     return q == BAD_QUERY or q == EMPTY_RESULT
@@ -45,14 +70,27 @@ def breduct(i,line, args):
         result = result.replace("#$#", " ")
         result = result.replace("-", "\\+ ")
     except:
-        print >> sys.stderr, "Beta Reduction Error:", n, line
+        sync_print("Beta Reduction Error: " + n + " " + line)
         result = "Error"
     return "%s\t%s" % (n, result)
 
 def typecheck(i,line,args):
+    global typecheck_log
     line = line.strip().split("\t")
     n, line = line[0], line[1]
-    return str(i) if type_check(line) else ""
+    return str(i) if type_check(line,typecheck_log) else ""
+
+def check_empty(i, line, args):
+    global gold_standard
+    n, line = line.strip().split("\t")
+    n = int(n)
+    return str(i) if len(gold_standard[n]) == 0 or len(read_list(line)) != 0 else ""
+
+def sync_print(line):
+    global stderr_lock
+    stderr_lock.acquire()
+    sys.stderr.write(str(line) + "\n")
+    stderr_lock.release()
 
 class GeoThread (threading.Thread):
     def __init__ (self, line, program, s, location):
@@ -66,7 +104,15 @@ class GeoThread (threading.Thread):
     
     def run(self):
         self.process = Popen([self.program, self.s, self.location, 'q'], stdin=PIPE,stdout=PIPE,stderr=PIPE)
-        outval,errval = self.process.communicate(input=(self.line+"\n"))
+        outval, errval = self.process.communicate(input=(self.line+"\nhalt.\n"))
+        
+        for line in errval.split("\n"):
+            if line.startswith("Answer = "):
+                outval = line
+                break
+        else:
+            outval = BAD_QUERY
+
         self.result = (self.process.returncode, outval, errval) 
     def terminate(self):
         self.process.terminate()
@@ -75,23 +121,24 @@ class GeoThread (threading.Thread):
 # Query the database!
 def geoquery(i,line, args):
     n, line = line.strip().split("\t")
-    line = line + "."
+    cmd = "%s(%s,Answer)." % (args.driver_function, line)
     result = None
     result_ok = True
-    if database.exists(args.database, line):
+    if database.exists(line):
         try:
-            result = database.read(args.database, line)
+            sync_print("Reading Query: " + line)
+            result = database.read(line)
         except:
             result_ok = False
     else:
         result_ok = False
     if not result_ok:
-        # print >> sys.stderr, i,"Executing Query:", line
+        sync_print("Executing Query: " + line)
         program, s, location = args.geoquery.split(" ")
         
-        thread = GeoThread(line,program,s,location)
+        thread = GeoThread(cmd,program,s,location)
         thread.start()
-        thread.join(TIMEOUT)
+        thread.join(set_timeout(n,TIMEOUT))
 
         if thread.is_alive():
             thread.terminate()
@@ -100,18 +147,25 @@ def geoquery(i,line, args):
         retcode, outval, errval = thread.result
         if retcode != 0:
             if retcode == -15:
-                print >> sys.stderr, "Timeout Query:", n, line
+                sync_print("Timeout Query: " + line)
                 outval = TIMEOUT_RESULT
             else:
-                print >> sys.stderr, "BadQuery:", n, line
+                sync_print("BadQuery: " + line)
                 outval = BAD_QUERY
         elif len(outval.strip()) == 0:
             outval = EMPTY_RESULT
         result = outval.strip()
-        database.write(args.database,line,result)
+        database.write(line,result)
     return "%s\t%s" % (n,result)
 
-gold_standard = []
+def set_timeout(n, base):
+    global time
+    n = int(n)
+    if n >= 0 and n < len(time):
+        return int(math.ceil(time[n])+4)
+    else:
+        return base
+
 # Generate Stat
 def stat(i,line,args):
     global gold_standard
@@ -139,9 +193,14 @@ def read_list(line):
     if len(temp) == 1:
         return set([])
     _, line = temp[0], temp[1]
+    if line[-1] == '.':
+        line = line[:-1]
     line = line[1:-1]
     for item in line.split(','):
-        line_set.add(item)
+        if len(item) > 0:
+            if item[0] == "'" and item[-1] == "'":
+                item = item[1:-1]
+            line_set.add(item)
     return line_set
 
 # Function to purge line if the line number does not exists in ref_file
@@ -151,8 +210,10 @@ def purge_line(ref_file, inp_files):
     lines = set()
     with open(ref_file) as ref_fp:
         for line in ref_fp:
-            lines.add(int(line.strip()))
-    
+            line = line.strip()
+            if len(line) != 0:
+                lines.add(int(line))
+
     # Second purge them!
     for inp_file in inp_files:
         buffer = []
@@ -169,21 +230,18 @@ with open(args.ref,'r') as gf:
     for line in gf:
         gold_standard.append(read_list(line.strip()))    
 
-# Decomposing File Input
-cols = args.input.split("/")
-parent_dir, file_name = "/".join(cols[:-1]), cols[-1]
-stripped_fname = ".".join(file_name.split(".")[:-1])
-
-# Some Intermediate result output path
-nbest_path = args.input
-breduct_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".reduct"
-typecheck_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".typecheck"
-result_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".result"
+# Reading Timeout
+with open(args.time,'r') as tf:
+    for line in tf:
+        time.append(float(line.strip()))
 
 # Execution
 execpar(args, breduct, open(args.input, 'r'), open(breduct_path,'w'), sys.stderr)
 execpar(args, typecheck, open(breduct_path, 'r'), open(typecheck_path, 'w'), sys.stderr, print_empty=False)
 purge_line(typecheck_path, [nbest_path, breduct_path])
 execpar(args, geoquery, open(breduct_path, 'r'), open(result_path,'w'), sys.stderr)
+execpar(args, check_empty, open(result_path, 'r'), open(empty_path, 'w'), sys.stderr, print_empty=False)
+purge_line(empty_path, [nbest_path,result_path])
 execpar(args, stat, open(result_path,'r'), sys.stdout, sys.stderr)
-
+typecheck_log.close()
+sys.stderr.flush()

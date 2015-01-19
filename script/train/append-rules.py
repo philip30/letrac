@@ -22,5 +22,6 @@ for line in sys.stdin:
 with open(args.rules) as rule_fp:
     for line in rule_fp:
         line = line.strip()
-        print_rule(line,args.trg_factors)
+        if len(line) != 0:
+            print_rule(line,args.trg_factors)
 

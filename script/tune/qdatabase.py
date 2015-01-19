@@ -1,62 +1,113 @@
 #!/usr/bin/python
 
 import sys
+import hashlib
 import time
-import os
-import hashlib 
+import random
+import mysql.connector as mysql
+from multiprocessing import Lock
 
-MAX_TRIES = 20
-def main():
-    init(sys.argv[1])
+DB_NAME = "GEOQUERY_CACHE"
+TABLES = {}
+TABLES['query'] = (
+        "CREATE TABLE IF NOT EXISTS `query` ("
+        "   `hash` varchar(255) NOT NULL,"
+        "   `query` text NOT NULL,"
+        "   `result` text NOT NULL,"
+        "   PRIMARY KEY (`hash`)) ENGINE=InnoDB"
+)
+lock = Lock()
 
-def init(loc):
-    print >> sys.stderr, "Checking exists:", loc
-    if not os.path.exists(loc):
-        print >> sys.stderr, "Not exists, creating dir:", loc
-        os.makedirs(loc)
-    else:
-        print >> sys.stderr, "Database exists."
+def hash_q(query):
+    return str(hashlib.sha224(b"%s" % (query)).hexdigest())
 
-def build_path(loc,query):
-    return loc + '/' + str(hashlib.sha224(query).hexdigest())
+def parse_config(config_file):
+    ret_dict = {}
+    with open(config_file) as c_p:
+        for line in c_p:
+            line = line.strip().split("\t")
+            ret_dict[line[0]] = line[1]
+    return ret_dict
 
-def exists(loc, query):
-    return os.path.exists(build_path(loc,query))
+class MySql:
+    # Init DB
+    def __init__(self,config):
+        config = parse_config(config)
+        self.username = config["user"]
+        self.password = config["password"]
+        self.host = config["host"]
+        self.counter = 0
 
-def write(loc,query,result):
-    loc = build_path(loc,query)
-    if os.path.exists(loc):
-        f = open(loc,"r")
-        line1 = f.readline().strip()
-        if query != line1 and len(line1) != 0:
-            print >> sys.stderr, "ERROR, hash error double:" + query + " with " + line1
-            return 1
-        f.close()
-    else:
-        f = open(loc,"w")
-        f.write(query + os.linesep)
-        f.write(result + os.linesep)
-        f.close()
-    return 0
+        # Initiate database
+        db = mysql.connect(user=config["user"], password=config["password"], host=config["host"])
+        cursor = db.cursor()
+        
+        try:  
+            cursor.execute("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET 'utf8'" % (DB_NAME))
+            db.database = DB_NAME
+            for name, ddl in TABLES.items():
+                cursor.execute(ddl)
+        finally:    
+            cursor.close()
+            db.close()
 
-def read(loc,query,default="Answer = [ReadingTimeOut]"):
-    tries = 0
-    while not exists(loc,query):
-        tries += 1
-        if tries == MAX_TRIES:
-            return default
-        time.sleep(1)
-    f = open(build_path(loc,query),"r")
-    line1 = f.readline().strip()
-    if line1 != query:
-        if line1 == '':
-            os.remove(build_path(loc,query))
-        else:
-            print >> sys.stderr, "ERROR, hash error double:" + query + " with " + line1
-        return None
-    ret = f.readline().strip()
-    f.close()
-    return ret
+    def connect(self):
+        db = None
+        while db is None:
+            try:
+                db = mysql.connect(user=self.username, password=self.password, host=self.host, database=DB_NAME)
+            except mysql.errors.InterfaceError as e:
+                print >> sys.stderr, str(e)
+                time.sleep(random.randint(1,5))
+        return db
     
-if __name__ == '__main__':
-    main()
+    def exists(self,query):
+        db = self.connect()
+        cursor = db.cursor()
+    
+        try:
+            select_query = ("SELECT q.query, q.result FROM `query` AS q WHERE q.hash = \"%s\"" % (hash_q(query)))
+            cursor.execute(select_query)
+            
+            result = [data for data in cursor]
+            return len(result) != 0
+        finally:
+            db.close()
+            cursor.close()
+       
+    def write(self,query,result):
+        db = self.connect()
+        cursor = db.cursor()
+        try:
+            add_query = ("INSERT IGNORE INTO `query`" 
+                "(hash, query, result) VALUES (%s, %s, %s)")
+    
+            query_data = (hash_q(query), query, result)
+    
+            cursor.execute(add_query, query_data)
+            db.commit()
+        finally:
+            db.close()
+            cursor.close()
+    
+    def read(self,query):
+        time.sleep(random.uniform(0.01,0.05))
+        
+#        lock.aqcquire()
+#        self.counter += 1
+#        if (self.counter % 250 == 0):
+#            time.sleep(1)
+#        lock.release()
+
+        db = self.connect()
+        cursor = db.cursor()
+            
+        try:
+            select_query = ("SELECT q.result FROM `query` AS q WHERE q.hash = \"%s\"" % hash_q(query))
+            cursor.execute(select_query)
+            
+            result = [data for data in cursor]
+            return result[0][0]
+        finally:
+            cursor.close()
+       
