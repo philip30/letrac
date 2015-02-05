@@ -5,10 +5,12 @@
 
 import sys
 import argparse
+import subprocess
 
 parser = argparse.ArgumentParser(description="Append KB")
 parser.add_argument('--kb', type=str,required=True)
 parser.add_argument('--trg_factors', type=int, default=1)
+parser.add_argument('--stem', type=str)
 args = parser.parse_args()
 
 # Global variables
@@ -18,9 +20,18 @@ all_map = set()
 if trg_factors != 1 and trg_factors != 2:
     raise Exception("Can supports only have 1 or 2 trg_factors.")
 
+
+def stem(word):
+    pipe = subprocess.Popen(["perl", args.stem], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    out, err = pipe.communicate(input=word)
+    return out.strip()
+
 ### Functions to build the source + target string for the rule
 def build_source(head,name):
     name = name.split()
+    if args.stem:
+        name = [stem(x) for x in name]
+        
     return (" ".join(['"%s"' % (x) for x in name]) + " @ " + head)
 
 def build_target(head,trg,src):
@@ -28,7 +39,7 @@ def build_target(head,trg,src):
         trg = "'" + trg.replace(" ","#$#") + "'"
     s = '"%s" @ %s' % (trg, head)
     if trg_factors == 2:
-        s = src + " |COL| " + s
+        s = build_source(head,src) + " |COL| " + s
     return s
 
 ### Function to print the KB 

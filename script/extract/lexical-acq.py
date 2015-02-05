@@ -126,7 +126,7 @@ def main():
         for rule in rules:
             r = rule
             if r != None:
-                print r
+                print index, "|||", str(r)
         if (args.verbose):print '----------------------------------------------------------------------------'
     #### Closing all files
     map(lambda x: x.close(), [inp_file, sent_file, fol_file, align_file])
@@ -228,22 +228,23 @@ def rename_non_terminal(c,xFixed = True):
     if xFixed:
         for token in parts[0].split():
             if token[0] == 'x':
-                nt_map[token[:2]] = token[:2]
-                fixed.add(int(token[1]))
-    
+                x, right = token.split(":")
+                nt_map[x] = x
+                fixed.add(int(x[1:]))
+
     for part in parts:
         tokens = part.split()
         for i, token in enumerate(tokens):
             if token == '@': break
             if token[0] != '"' and token[-1] != '"':
-                t = token[:2]
+                t, right = token.split(":")
                 if t not in nt_map:
                     while ctr in fixed:
                         ctr += 1
                     nt_new = 'x' + str(ctr)
                     nt_map[t] = nt_new
                     ctr += 1
-                tokens[i] = nt_map[t] + token[2:]
+                tokens[i] = nt_map[t] + ":" + right
         ret.append(' '.join(tokens))
     return ' ||| '.join(ret)
 

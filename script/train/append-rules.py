@@ -13,7 +13,10 @@ args = parser.parse_args()
 
 def print_rule(line,trg_factor):
     src, trg, feat = line.split(" ||| ")
-    trgs = " |COL| ".join([trg for i in range(trg_factor)])
+    if trg_factor == 2:
+        trgs = " |COL| ".join([src, trg])
+    else:
+        trgs = trg
     print "%s ||| %s ||| %s" % (src,trgs,feat)
 
 for line in sys.stdin:

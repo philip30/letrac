@@ -39,44 +39,49 @@ class MySql:
         self.counter = 0
 
         # Initiate database
-        db = mysql.connect(user=config["user"], password=config["password"], host=config["host"])
-        cursor = db.cursor()
+        try:
+            db = mysql.connect(user=config["user"], password=config["password"], host=config["host"])
+            cursor = db.cursor()
         
-        try:  
-            cursor.execute("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET 'utf8'" % (DB_NAME))
-            db.database = DB_NAME
-            for name, ddl in TABLES.items():
-                cursor.execute(ddl)
-        finally:    
-            cursor.close()
-            db.close()
+            try:  
+                cursor.execute("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET 'utf8'" % (DB_NAME))
+                db.database = DB_NAME
+                for name, ddl in TABLES.items():
+                    cursor.execute(ddl)
+            finally:    
+                cursor.close()
+                db.close()
+        except:
+            pass
 
     def connect(self):
         db = None
-        while db is None:
-            try:
-                db = mysql.connect(user=self.username, password=self.password, host=self.host, database=DB_NAME)
-            except mysql.errors.InterfaceError as e:
-                print >> sys.stderr, str(e)
-                time.sleep(random.randint(1,5))
+        try:
+            db = mysql.connect(user=self.username, password=self.password, host=self.host, database=DB_NAME)
+        except:
+            return None
         return db
     
-    def exists(self,query):
-        db = self.connect()
-        cursor = db.cursor()
-    
-        try:
-            select_query = ("SELECT q.query, q.result FROM `query` AS q WHERE q.hash = \"%s\"" % (hash_q(query)))
-            cursor.execute(select_query)
-            
-            result = [data for data in cursor]
-            return len(result) != 0
-        finally:
-            db.close()
-            cursor.close()
+#    def exists(self,query):
+#        db = self.connect()
+#        cursor = db.cursor()
+#    
+#        try:
+#            select_query = ("SELECT q.query, q.result FROM `query` AS q WHERE q.hash = \"%s\"" % (hash_q(query)))
+#            cursor.execute(select_query)
+#            
+#            result = [data for data in cursor]
+#            return len(result) != 0
+#        finally:
+#            db.close()
+#            cursor.close()
        
     def write(self,query,result):
         db = self.connect()
+        
+        if db is None:
+            return
+        
         cursor = db.cursor()
         try:
             add_query = ("INSERT IGNORE INTO `query`" 
@@ -91,7 +96,7 @@ class MySql:
             cursor.close()
     
     def read(self,query):
-        time.sleep(random.uniform(0.01,0.05))
+        #time.sleep(random.uniform(0.01,0.05))
         
 #        lock.aqcquire()
 #        self.counter += 1
@@ -100,6 +105,10 @@ class MySql:
 #        lock.release()
 
         db = self.connect()
+
+        if db is None:
+            return None
+
         cursor = db.cursor()
             
         try:
@@ -107,7 +116,10 @@ class MySql:
             cursor.execute(select_query)
             
             result = [data for data in cursor]
-            return result[0][0]
+            if len(result) > 0:
+                return result[0][0]
+            else:
+                return None
         finally:
             cursor.close()
        

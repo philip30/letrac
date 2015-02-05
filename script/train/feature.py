@@ -9,11 +9,9 @@ context = defaultdict(lambda:0)
 count = defaultdict(lambda:0)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--trg_factors', type=int,default = 1)
 parser.add_argument('--one_feat', action="store_true")
+parser.add_argument('--trg_factors', type=int, default=1)
 args = parser.parse_args()
-
-trg_factors = args.trg_factors
 
 def feat(key, value):
     if float(value) > 1e-8:
@@ -22,13 +20,15 @@ def feat(key, value):
 
 def paralength(paraphrase):
     count = 0
-    for word in paraphrase:
+    for word in paraphrase.split():
+        if word == "@":
+            break
         if len(word) > 1 and word[0] == '"' and word[-1] == '"':
             count += 1
     return count
 
 for i,line in enumerate(sys.stdin):
-    (sent, log) = line.strip().split(" ||| ")
+    (id, sent, log) = line.strip().split(" ||| ")
     count[sent,log] += 1
     context[sent] += 1
     context[log] += 1
@@ -42,6 +42,7 @@ for (i,((sent,log), cnt)) in enumerate(sorted(count.items(),key=lambda x:x[0])):
         feat("parse", 1 if all((x[0] == '"' and x[-1] == '"') for x in sent[:-2]) else 0), \
         feat("count", cnt), \
         feat("r"+str(i),(1 if args.one_feat else 0)),\
-        feat("p",1)\
+        feat("p",1),\
+        feat("word", (paralength(log.split(" |COL| ")[0]) if args.trg_factors == 2 else 0))\
         ])))
 

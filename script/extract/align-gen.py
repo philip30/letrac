@@ -55,7 +55,11 @@ def main():
         (sentence_node, query_node) = extract(line,0,"")[0][0].childs
 
         #### Sentence and node
-        sentence = [node.label for node in sentence_node.childs][:-1]
+        sentence = [node.label for node in sentence_node.childs]
+
+        if sentence[-1] == "'.'" or sentence[-1] == "?":
+            sentence = sentence[:-1]
+
         # print_node(sentence_node)
         # print_node(query_node)
         for word in sentence: words.add(word)

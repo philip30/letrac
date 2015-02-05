@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from multiprocessing import Pool, Process, Lock
 from subprocess import Popen, PIPE
 
-TIMEOUT = 60 # second
+TIMEOUT = 2 # second
 BAD_QUERY = "Answer = [BadQuery]"
 EMPTY_RESULT = "Answer = [EmptyResult]"
 TIMEOUT_RESULT = "Answer = [Timeout]"
@@ -27,10 +27,12 @@ parser.add_argument('-input', type=str, required=True)
 parser.add_argument('-trg_factors', type=int, required=True)
 parser.add_argument('-geoquery', type=str, required=True)
 parser.add_argument('-ref', type=str, required=True)
+parser.add_argument('-original_ref', type=str, required=True)
 parser.add_argument('-database_config', type=str)
 parser.add_argument('-time', type=str, required=True)
 parser.add_argument('-timeout', type=int, default=60)
 parser.add_argument('-driver_function', type=str, default="execute_query")
+parser.add_argument('-no_typecheck', action="store_true")
 args = parser.parse_args()
 
 TIMEOUT = args.timeout
@@ -54,6 +56,8 @@ typecheck_log = open(parent_dir + ("/" if len(parent_dir) != 0 else "") + stripp
 
 # Global Data Structure
 gold_standard = []
+original_ref = []
+breduct_list = []
 time = []
 
 def malformed_answer(q):
@@ -63,8 +67,16 @@ def malformed_answer(q):
 def breduct(i,line, args):
     line = line.strip().split(" ||| ")
     n, line = line[0], line[1]
-    line = line.split(" |COL| ")[args.trg_factors-1]
-    line = line.replace(" ","") 
+    if len(line.strip()) == 0:
+        return "%s\t%s" % (n, "Error")
+
+    line_col = line.split(" |COL| ")
+    
+    if args.trg_factors == 2:
+        paraphrase = line_col[0]
+        
+    line = line_col[args.trg_factors-1].replace(" ","") 
+
     try:
         result = beta_reduction(line)
         result = result.replace("#$#", " ")
@@ -72,12 +84,16 @@ def breduct(i,line, args):
     except:
         sync_print("Beta Reduction Error: " + n + " " + line)
         result = "Error"
+
+    if args.trg_factors == 2:
+        result = "%s |COL| %s" % (result, paraphrase)
+
     return "%s\t%s" % (n, result)
 
 def typecheck(i,line,args):
     global typecheck_log
     line = line.strip().split("\t")
-    n, line = line[0], line[1]
+    n, line = line[0], line[1].split(" |COL |")[-1]
     return str(i) if type_check(line,typecheck_log) else ""
 
 def check_empty(i, line, args):
@@ -104,12 +120,16 @@ class GeoThread (threading.Thread):
     
     def run(self):
         self.process = Popen([self.program, self.s, self.location, 'q'], stdin=PIPE,stdout=PIPE,stderr=PIPE)
+        
         outval, errval = self.process.communicate(input=(self.line+"\nhalt.\n"))
         
-        for line in errval.split("\n"):
-            if line.startswith("Answer = "):
-                outval = line
-                break
+        if errval is not None:
+            for line in errval.split("\n"):
+                if line.startswith("Answer = "):
+                    outval = line
+                    break
+            else:
+                outval = BAD_QUERY
         else:
             outval = BAD_QUERY
 
@@ -121,16 +141,17 @@ class GeoThread (threading.Thread):
 # Query the database!
 def geoquery(i,line, args):
     n, line = line.strip().split("\t")
+    line = line.split(" |COL| ")[0]
     cmd = "%s(%s,Answer)." % (args.driver_function, line)
     result = None
     result_ok = True
-    if database.exists(line):
-        try:
-            sync_print("Reading Query: " + line)
-            result = database.read(line)
-        except:
+    try:
+        result = database.read(line)
+        if result is None:
             result_ok = False
-    else:
+        else:
+            sync_print("Reading Query: " + line)
+    except:
         result_ok = False
     if not result_ok:
         sync_print("Executing Query: " + line)
@@ -145,6 +166,9 @@ def geoquery(i,line, args):
             thread.join()
 
         retcode, outval, errval = thread.result
+        if outval is None:
+            outval = EMPTY_RESULT
+        
         if retcode != 0:
             if retcode == -15:
                 sync_print("Timeout Query: " + line)
@@ -162,16 +186,19 @@ def set_timeout(n, base):
     global time
     n = int(n)
     if n >= 0 and n < len(time):
-        return int(math.ceil(time[n])+4)
+        return int(math.ceil(time[n])+1)
     else:
         return base
 
 # Generate Stat
 def stat(i,line,args):
     global gold_standard
+    global original_ref
+    global breduct_list
     n, line = line.strip().split("\t")
     comp_list = read_list(line)
-    return "%d 1" % (1 if comp_list == gold_standard[int(n)] else 0)
+    n = int(n) 
+    return "%d 1" % (1 if breduct_list[i] == original_ref[n] or comp_list == gold_standard[n] else 0)
 
 # Cooly process all of them in parallel 
 def execpar(args, function, inf, ouf, erri,print_empty=True):
@@ -230,6 +257,11 @@ with open(args.ref,'r') as gf:
     for line in gf:
         gold_standard.append(read_list(line.strip()))    
 
+# Original Ref
+with open(args.original_ref) as of:
+    for line in of:
+        original_ref.append(line.strip()[:-1].replace(" ",""))
+
 # Reading Timeout
 with open(args.time,'r') as tf:
     for line in tf:
@@ -237,11 +269,19 @@ with open(args.time,'r') as tf:
 
 # Execution
 execpar(args, breduct, open(args.input, 'r'), open(breduct_path,'w'), sys.stderr)
-execpar(args, typecheck, open(breduct_path, 'r'), open(typecheck_path, 'w'), sys.stderr, print_empty=False)
-purge_line(typecheck_path, [nbest_path, breduct_path])
+
+if not args.no_typecheck:
+    execpar(args, typecheck, open(breduct_path, 'r'), open(typecheck_path, 'w'), sys.stderr, print_empty=False)
+    purge_line(typecheck_path, [nbest_path, breduct_path])
+
 execpar(args, geoquery, open(breduct_path, 'r'), open(result_path,'w'), sys.stderr)
-execpar(args, check_empty, open(result_path, 'r'), open(empty_path, 'w'), sys.stderr, print_empty=False)
-purge_line(empty_path, [nbest_path,result_path])
+#execpar(args, check_empty, open(result_path, 'r'), open(empty_path, 'w'), sys.stderr, print_empty=False)
+#purge_line(empty_path, [nbest_path,result_path])
+
+with open(breduct_path) as b_fp:
+    for line in b_fp:
+        breduct_list.append(line.strip().split("\t")[1].split(" |COL| ")[-1].replace(" ",""))
 execpar(args, stat, open(result_path,'r'), sys.stdout, sys.stderr)
+
 typecheck_log.close()
 sys.stderr.flush()

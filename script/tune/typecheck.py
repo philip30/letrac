@@ -224,7 +224,7 @@ def typecheck(line, dump=sys.stderr):
         if name == 'const' or name == '\\+const':
             name = name + "_" + childs[0][0]
         elif name not in type_map and name not in type_map:
-            raise Exception("Function name is not recognized: " + name)
+            return False
 
         for i, var in enumerate(variables):
             if var not in var_map:
