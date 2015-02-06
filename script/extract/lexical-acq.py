@@ -23,7 +23,7 @@ LEAF = "PRED"
 ENTITY = "ENTITY"
 ABREVIATION = "ABR"
 
-TYPE_LABEL = set([CONJUNCTION,NEGATION,LEAF])
+TYPE_LABEL = set()
 
 PRECEDENCE = defaultdict(lambda:0)
 PRECEDENCE[QUERY] = 100
@@ -294,11 +294,14 @@ def lexical_acq(node,sent,rules,merge_unary=False):
         node.frontier_child = {}
         sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary,{},[False] * len(sent))
         #logic = merge_logic_output(logic)
-        res = sentence + " @ " +  node.head+append_var_info(node.bound) + " ||| " +  logic +  " @ " + node.head+append_var_info(node.bound)
+        res = sentence + " @ " +  normalize_head(node.head)+append_var_info(node.bound) + " ||| " +  logic +  " @ " + normalize_head(node.head)+append_var_info(node.bound)
         node.result = res
         rules.append(res)
     return rules
 
+SPAN_BEGIN=0
+SPAN_END=1
+NODE=2
 def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=True):
     # extracting sent side
     span = []
@@ -322,22 +325,22 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
         else:
             span.append((-1,-1,child))
 
-    sorted(span,key=lambda x:x[0]) # sort the key including the first prefix to come.
+    sorted(span,key=lambda x:x[SPAN_BEGIN]) # sort the key including the first prefix to come.
     for s in span:
-        if type(s[2]) == str:
-            sent_list.append((s[0],s[1],'"'+s[2]+'"'))
-        elif s[2].frontier and not (merge_unary and is_unary(node,s[2])):
+        if type(s[NODE]) == str:
+            sent_list.append((s[SPAN_BEGIN],s[SPAN_END],'"'+s[NODE]+'"'))
+        elif s[NODE].frontier and not (merge_unary and is_unary(node,s[NODE])):
             number = len(var_map)
-            nt = non_terminal(number,s[2].head,bound_remapping(s[2].bound,bound_map))
+            nt = non_terminal(number,normalize_head(s[NODE].head),bound_remapping(s[NODE].bound,bound_map))
             #nt = non_terminal(number,s[2].head,s[2].bound)
-            sent_list.append((s[0],s[1],nt))
-            logic_list.append((nt,bound_remapping(s[2].bound, bound_map)))
+            sent_list.append((s[SPAN_BEGIN],s[SPAN_END],nt))
+            logic_list.append((nt,bound_remapping(s[NODE].bound, bound_map)))
             #logic_list.append((nt,s[2].bound))
-            var_map[s[2].id] = number
-            root.frontier_child[number] = s[2]
+            var_map[s[NODE].id] = number
+            root.frontier_child[number] = s[NODE]
         else: # depth recursion to this node, extraction continued rooted at this node
-            s[2].not_frontier()
-            sent_child, logic_child = extract_node(root,s[2],sent,var_map,merge_unary,bound_map,extracted,start=False)
+            s[NODE].not_frontier()
+            sent_child, logic_child = extract_node(root,s[NODE],sent,var_map,merge_unary,bound_map,extracted,start=False)
             for s in sent_child: sent_list.append(s)
             logic_list.append(logic_child)
    
@@ -368,6 +371,12 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
     
     return (sent_list if not start else (' '.join([x[2] for x in sorted(sent_list,key=lambda x:x[0])])),\
             (logic,bound_remapping(node.bound,bound_map)))
+
+def normalize_head(head):
+    if head == CONJUNCTION or head == NEGATION:
+        return "FORM"
+    else:
+        return head 
 
 def bound_remapping(bound, bound_map):
     ret = []
@@ -432,6 +441,7 @@ def mark_frontier_node(node, complement_span):
     node.frontier = (not len(span) == 0) and (not any(e >= span[0] and e <= span[-1] for e in node.complement))
     # Additional rule for precedence
     node.frontier = node.frontier and unary_precedence_constraint(node)
+    node.frontier = node.frontier or node.label == "const"
     return node
 
 def unary_precedence_constraint(node):

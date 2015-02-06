@@ -11,7 +11,7 @@ binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
 my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP);
-my ($THREE_SYNC, $MAX_SIZE,$ALIGN,$MANUAL);
+my ($MAX_SIZE,$ALIGN,$MANUAL);
 my $MAX_SIZE = "4";
 
 GetOptions(
@@ -31,7 +31,7 @@ GetOptions(
 );
 
 if (not (defined($LETRAC_DIR) && defined($PIALIGN_DIR) && defined($WORKING_DIR) && defined($INPUT))) {
-    die "Usage: run-extraction.pl -letrac-dir [LETRAC] -pialign-dir [PIALIGN] -working-dir [WORKING DIR] -input-file [INPUT_FILE]\n";
+    die "Usage: run-extraction.pl -letrac [LETRAC] -pialign [PIALIGN] -working-dir [WORKING DIR] -input-file [INPUT_FILE]\n";
 }
 
 ### START HERE
@@ -40,8 +40,8 @@ my $file_name = substr($INPUT, rindex($INPUT, '/')+1);
 # CREATING DIR
 if (not (mkdir $WORKING_DIR)) {
     if ($FORCE) {
-        safesystem("rm -rf $WORKING_DIR");
-        safesystem("mkdir $WORKING_DIR");
+        safesystem("rm -rf $WORKING_DIR") or die;
+        safesystem("mkdir $WORKING_DIR") or die;
     } else {
         die "couldn't mkdir $WORKING_DIR, directory exists.";
     }
@@ -54,7 +54,6 @@ safesystem("$LETRAC_DIR/script/extract/input_preprocess.py < $INPUT > $WORKING_D
 # Creating input for alignment
 my $manual = $MANUAL ? " --manual $MANUAL" : "";
 safesystem("$LETRAC_DIR/script/extract/align-gen.py$manual --osent $WORKING_DIR/data/$file_name.sent --ologic $WORKING_DIR/data/$file_name.fol --input $WORKING_DIR/data/$file_name.preprocess") or die "Failed on creating input for alignment";
-safesystem("$LETRAC_DIR/script/extract/swr.py < $WORKING_DIR/data/$file_name.sent > $WORKING_DIR/data/$file_name.kword") if ($THREE_SYNC);
 exit(0) if $LAST_STEP eq "input";
 
 # Running Alignment
@@ -66,11 +65,11 @@ if (not $ALIGN) {
 } 
 
 # Visualizing alignment
-safesystem("head -\$(wc -l $WORKING_DIR/data/$file_name.sent) $WORKING_DIR/data/$file_name.fol.gin > $WORKING_DIR/data/$file_name.fol.visin");
-safesystem("$LETRAC_DIR/script/extract/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $ALIGN 2 1 > $WORKING_DIR/align/align.vis");
+safesystem("head -\$(wc -l $WORKING_DIR/data/$file_name.sent) $WORKING_DIR/data/$file_name.fol.gin > $WORKING_DIR/data/$file_name.fol.visin") or die;
+safesystem("$LETRAC_DIR/script/extract/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $ALIGN 2 1 > $WORKING_DIR/align/align.vis") or die;
 exit(0) if $LAST_STEP eq "align"; 
 
-safesystem("mkdir $WORKING_DIR/model");
+safesystem("mkdir $WORKING_DIR/model") or die;
 # lexical-acquisition
 my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --input $WORKING_DIR/data/$file_name.preprocess --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
 $lex_command .= " --verbose" if $VERBOSE;
