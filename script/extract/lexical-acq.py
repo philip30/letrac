@@ -121,7 +121,7 @@ def main():
         rules = []
         compose_rule(rules, query_node, args.max_size)
         rules = map(lambda x:rename_non_terminal(x,False),rules)
-        check_rules(rules,cycle_map)
+        rules = check_rules(rules,cycle_map)
 
         for rule in rules:
             r = rule
@@ -135,19 +135,25 @@ def main():
     print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
 
 def check_rules(rules,mp):
+    ret = []
     # checking for loop 
     for rule in rules:
+        if rule is None: continue
         src,trg = rule.split(" ||| ")
         src = src.split()
+        rule_legal = True
         # if it is unary
         if len(src) == 3 and src[0][0] != '"' and src[0][-1] != '"':
             child_symbol = src[0].split(":")[1]
             parent_symbol = src[2]
             if parent_symbol in mp[child_symbol]:
-                raise Exception("Error with cycle: "+ parent_symbol+ " -> " + child_symbol + "->" + parent_symbol)
+                rule_legal = False
+                #raise Exception("Error with cycle: "+ parent_symbol+ " -> " + child_symbol + " -> " + parent_symbol + " : " + str(rule))
             mp[parent_symbol].add(child_symbol)
         # check for parentheses
         check_parentheses([" ".join(src)] + [trg])
+        if rule_legal: ret.append(rule)
+    return ret
 
 def check_parentheses(inps):
     for inp in inps:
@@ -410,8 +416,10 @@ def merge_logic_output(logic):
     return ' '.join(words)
 
 def is_unary(parent, node):
-    merge = parent.e[0] == node.e[0] and parent.e[-1] == node.e[-1]
-    return parent.head == node.head and len(parent.childs) == 1 and merge 
+    merge = True
+    if len(parent.e) > 0 and len(node.e) > 0:
+        merge = parent.e[0] == node.e[0] and parent.e[-1] == node.e[-1]
+    return parent.head == node.head and len(parent.childs) == 1 and merge or len(parent.e) == 0 or len(node.e) == 0
 
 def bound_to_lambda(bound):
     return ("\"" + "".join(["\\x" + str(x) for x in reversed(bound)])+".\"" if len(bound) > 0 else "")

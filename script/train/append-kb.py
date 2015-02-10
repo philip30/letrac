@@ -44,7 +44,7 @@ def build_target(head,trg,src):
 
 ### Function to print the KB 
 def print_rule(head, src, trg, feature):
-    print '%s ||| %s ||| %s=1' % (build_source(head,src),build_target(head,trg,src),feature)
+    print '%s ||| %s ||| %s=1' % (build_source(head,src),build_target(head,trg,src),"kb")
 
 ### Functions to process the line
 def state_kb(line):

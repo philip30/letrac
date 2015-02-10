@@ -18,12 +18,7 @@ feature={'lm':0.8,\
         'parse':0.2, \
         'prob': 0.05, \
         'p':'-0.5',\
-        'state_kb':'0.5',\
-        'city_kb':'0.5',\
-        'river_kb':0.2, \
-        'mountain_kb':0.1, \
-        'lake_kb':0.2,\
-        'abr_kb':0.3}
+        'kb':0.3}
 
 ROOT_SYMBOL = "QUERY"
 

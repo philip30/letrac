@@ -75,7 +75,7 @@ my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --input $WORKING_DI
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";
-safesystem($lex_command);
+safesystem($lex_command) or die;
 
 # Auxiliary functions
 sub safesystem {
