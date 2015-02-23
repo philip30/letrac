@@ -65,7 +65,9 @@ if (not $ALIGN) {
 } 
 
 # Visualizing alignment
-safesystem("head -\$(wc -l $WORKING_DIR/data/$file_name.sent) $WORKING_DIR/data/$file_name.fol.gin > $WORKING_DIR/data/$file_name.fol.visin") or die;
+my @line = split(/ /,`wc -l $WORKING_DIR/data/$file_name.sent`);
+
+safesystem("head -$line[0] $WORKING_DIR/data/$file_name.fol.gin > $WORKING_DIR/data/$file_name.fol.visin") or die;
 safesystem("$LETRAC_DIR/script/extract/visualize.pl $WORKING_DIR/data/$file_name.sent $WORKING_DIR/data/$file_name.fol.visin $ALIGN 2 1 > $WORKING_DIR/align/align.vis") or die;
 exit(0) if $LAST_STEP eq "align"; 
 
