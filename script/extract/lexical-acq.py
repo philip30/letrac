@@ -144,9 +144,9 @@ def check_rules(rules,mp):
         rule_legal = True
         # if it is unary
         if len(src) == 3 and src[0][0] != '"' and src[0][-1] != '"':
-            child_symbol = src[0].split(":")[1]
-            parent_symbol = src[2]
-            if parent_symbol in mp[child_symbol]:
+            child_symbol = extract_symbol(src[0].split(":")[1])
+            parent_symbol = extract_symbol(src[2])
+            if parent_symbol in mp[child_symbol] or parent_symbol == child_symbol:
                 rule_legal = False
                 #raise Exception("Error with cycle: "+ parent_symbol+ " -> " + child_symbol + " -> " + parent_symbol + " : " + str(rule))
             mp[parent_symbol].add(child_symbol)
@@ -154,6 +154,9 @@ def check_rules(rules,mp):
         check_parentheses([" ".join(src)] + [trg])
         if rule_legal: ret.append(rule)
     return ret
+
+def extract_symbol(symbol):
+    return symbol[:symbol.index("[")] if "[" in symbol else symbol
 
 def check_parentheses(inps):
     for inp in inps:

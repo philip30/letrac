@@ -13,11 +13,11 @@ args = parser.parse_args()
 feature={'lm':0.8,\
         'psgl':0.05,\
         'plgs':0.05,\
-        'count':0.05,\
-        'del_rule':-1,\
+        'del_rule':-10,\
         'parse':0.2, \
         'prob': 0.05, \
         'p':'-0.5',\
+        'unk': '-1',\
         'kb':0.3}
 
 ROOT_SYMBOL = "QUERY"

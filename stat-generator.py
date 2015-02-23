@@ -28,12 +28,14 @@ parser.add_argument('-time', type=str, required=True)
 parser.add_argument('-timeout', type=int, default=60)
 parser.add_argument('-driver_function', type=str, default="execute_query")
 parser.add_argument('-no_typecheck', action="store_true")
+parser.add_argument('-check_empty', action="store_true")
 args = parser.parse_args()
 
 # Global variables
 BAD_QUERY = "Answer = [BadQuery]"
 EMPTY_RESULT = "Answer = [EmptyResult]"
 TIMEOUT_RESULT = "Answer = [Timeout]"
+BREDUCT_ERR = "Error"
 stderr_lock = Lock()
 TIMEOUT = args.timeout
 
@@ -71,7 +73,7 @@ def breduct(i,line, args):
     line = line.strip().split(" ||| ")
     n, line = line[0], line[1]
     if len(line.strip()) == 0:
-        return "%s\t%s" % (n, "Error")
+        return "%s\t%s" % (n, BREDUCT_ERR)
 
     line_col = line.split(" |COL| ")
     
@@ -86,7 +88,7 @@ def breduct(i,line, args):
         result = result.replace("-", "\\+ ")
     except:
         sync_print("Beta Reduction Error: " + n + " " + line)
-        result = "Error"
+        result = BREDUCT_ERR
 
     if args.trg_factors == 2:
         result = "%s |COL| %s" % (result, paraphrase)
@@ -97,15 +99,15 @@ def breduct(i,line, args):
 def typecheck(i,line,args):
     global typecheck_log
     line = line.strip().split("\t")
-    n, line = line[0], line[1].split(" |COL| ")[-1]
+    n, line = line[0], line[1].split(" |COL| ")[0]
     return str(i) if type_check(line,typecheck_log) else ""
 
 # Checking whether line is empty or not
 def check_empty(i, line, args):
     global gold_standard
-    n, line = line.strip().split("\t")
-    n = int(n)
-    return str(i) if len(gold_standard[n]) == 0 or len(read_list(line)) != 0 else ""
+    line = line.strip().split("\t")
+    n, line = line[0], line[1]
+    return str(i) if len(read_list(line)) != 0 else ""
 
 # Synchronous printing for multithreading
 def sync_print(line):
@@ -142,7 +144,8 @@ class GeoThread (threading.Thread):
 
         self.result = (self.process.returncode, outval, errval) 
     def terminate(self):
-        self.process.terminate()
+        if self.process is not None:
+            self.process.terminate()
 
 # Query the database!
 def geoquery(i,line, args):
@@ -207,21 +210,28 @@ def stat(i,line,args):
     n = int(n) 
     return "%d 1" % (1 if breduct_list[i] == original_ref[n] or comp_list == gold_standard[n] else 0)
 
-# Cooly process all of them in parallel 
-def execpar(args, function, inf, ouf, erri,print_empty=True):
-    pool = Pool(processes=args.threads)
-    
-    if args.threads == 1:
-        for i, line in enumerate(inf):
-            print >> ouf, function(i, line, args)
-    else:
-        inp = [line for line in inf]
-        out = [pool.apply_async(function, args=(i,line,args)) for i, line in enumerate(inp)]
-        results = [p.get() for p in out]
+def exec_single(inf, ouf, function, args):
+    inf.seek(0)
+    for i, line in enumerate(inf):
+        print >> ouf, function(i,line,args)
 
-        for line in results:
-            if print_empty or len(line) != 0:
-                print >> ouf, line
+# Cooly process all of them in parallel 
+def execpar(args, function, inf, ouf, err,print_empty=True):
+    if args.threads == 1:
+        exec_single(inf, ouf, function, args)
+    else:
+        try:
+            pool = Pool(processes=args.threads)
+            inp = [line for line in inf]
+            out = [pool.apply_async(function, args=(i,line,args)) for i, line in enumerate(inp)]
+            results = [p.get() for p in out]
+
+            for line in results:
+                if print_empty or len(line) != 0:
+                    print >> ouf, line
+        except:
+            print >> err,"Multiprocessing exception, executing in single thread..."
+            exec_single(inf, ouf, function, args)
     inf.close()
     ouf.close()
 
@@ -293,6 +303,11 @@ typecheck_log.close()
 
 # Query the database
 execpar(args, geoquery, open(breduct_path, 'r'), open(result_path,'w'), sys.stderr)
+
+# Check empty
+if args.check_empty:
+    execpar(args, check_empty, open(result_path, 'r'), open(empty_path, 'w'), sys.stderr, print_empty=False)
+    purge_line(empty_path, [nbest_path, breduct_path, result_path])
 
 # Read the reduction list (After typecheck)
 with open(breduct_path) as b_fp:
