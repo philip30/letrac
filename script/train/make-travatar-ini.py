@@ -18,6 +18,7 @@ feature={'lm':0.8,\
         'prob': 0.05, \
         'p':'-0.5',\
         'unk': '-1',\
+        'word': '0.05',\
         'kb':0.3}
 
 ROOT_SYMBOL = "QUERY"

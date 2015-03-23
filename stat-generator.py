@@ -7,9 +7,9 @@ import argparse
 import threading
 import signal
 import math
-from script.tune.qdatabase import MySql
-from script.tune.breduct import breduct as beta_reduction
-from script.tune.typecheck import typecheck as type_check
+from script.util.qdatabase import MySql
+from script.util.breduct import breduct as beta_reduction
+from script.util.typecheck import typecheck as type_check
 from multiprocessing import Pool, Process, Lock
 from subprocess import Popen, PIPE
 
@@ -22,10 +22,10 @@ parser.add_argument('-input', type=str, required=True)
 parser.add_argument('-trg_factors', type=int, required=True)
 parser.add_argument('-geoquery', type=str, required=True)
 parser.add_argument('-ref', type=str, required=True)
-parser.add_argument('-original_ref', type=str, required=True)
+#parser.add_argument('-original_ref', type=str, required=True)
 parser.add_argument('-database_config', type=str)
-parser.add_argument('-time', type=str, required=True)
-parser.add_argument('-timeout', type=int, default=60)
+#parser.add_argument('-time', type=str, required=True)
+parser.add_argument('-timeout', type=int, default=1)
 parser.add_argument('-driver_function', type=str, default="execute_query")
 parser.add_argument('-no_typecheck', action="store_true")
 parser.add_argument('-check_empty', action="store_true")
@@ -154,6 +154,7 @@ def geoquery(i,line, args):
     cmd = "%s(%s,Answer)." % (args.driver_function, line)
     result = None
     result_ok = True
+# FOR THE SAKE OF DETECTING UNSTABLE RESULT THESE LINES ARE COMMENTED
     try:
         result = database.read(line)
         if result is None:
@@ -278,17 +279,10 @@ def purge_line(ref_file, inp_files):
 # Reading Gold Standard
 with open(args.ref,'r') as gf:
     for line in gf:
-        gold_standard.append(read_list(line.strip()))    
-
-# Original Ref
-with open(args.original_ref) as of:
-    for line in of:
-        original_ref.append(line.strip()[:-1].replace(" ",""))
-
-# Reading Timeout
-with open(args.time,'r') as tf:
-    for line in tf:
-        time.append(float(line.strip()))
+        line = line.strip().split("\t")
+        gold_standard.append(read_list(line[0]))    
+        original_ref.append(line[1][:-1].replace(" ",""))
+        time.append(float(line[2]))
 
 # Beta Reduction
 execpar(args, breduct, open(args.input, 'r'), open(breduct_path,'w'), sys.stderr)

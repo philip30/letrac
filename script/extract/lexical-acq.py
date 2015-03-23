@@ -108,7 +108,13 @@ def main():
         
         # change 'w1 w2' entity into w1_w2       
         query_node = transform_multi_words_entity(query_node)
-        
+       
+        if args.three_sync:
+            stopwords = set()
+            with open(args.three_sync) as sw_list:
+                for sw in sw_list:
+                    stopwords.add(sw.strip())
+            consider_stopwords(query_node,sent,stopwords)
         lexical_acq(query_node,sent,[],args.merge_unary)
         
         count += 1
@@ -134,12 +140,22 @@ def main():
     #### Printing stats
     print >> sys.stderr, "Finish extracting rule from %d pairs." % (count) 
 
+def consider_stopwords(node, sent, sw_list,root=True):
+    if not root and node.frontier:
+        g = filter(lambda x: x not in sw_list, [sent[i] for i in node.e])
+        if len(g) == 0:
+            node.frontier = False
+    for child in node.childs:
+        consider_stopwords(child, sent, sw_list,False)
+
+
 def check_rules(rules,mp):
     ret = []
     # checking for loop 
     for rule in rules:
         if rule is None: continue
-        src,trg = rule.split(" ||| ")
+        rule_col = rule.split(" ||| ")
+        src, trg = rule_col[0], rule_col[1]
         src = src.split()
         rule_legal = True
         # if it is unary
@@ -188,32 +204,41 @@ def print_traverse_rule(node):
     return node.id, result
 
 def compose_rule(rules,node, max_size):
-    ret = [(node.result,1)]
+    ret = [(node.result,1,node.span)]
     for nt, child in node.frontier_child.items():
         ret_child = compose_rule(rules,child,max_size)
         composed = []
-        for r_parent,p_size in ret:
-            for r,c_size in ret_child:
+        for r_parent,p_size,parent_span in ret:
+            for r,c_size,child_span in ret_child:
                 if c_size+p_size <= max_size:
-                    composed.append((compose_rule_string(nt, r_parent, r),c_size+p_size))
-        for c,size in composed:
-            ret.append((c,size))
-    for r,size in ret:
-        rules.append(r)
+                    copy_parent_span = copy.deepcopy(parent_span)
+                    composed.append((compose_rule_string(nt, r_parent, r, copy_parent_span, child_span),c_size+p_size,copy_parent_span))
+        for c,size,span in composed:
+            ret.append((c,size,span))
+    for r,size,span in ret:
+        rules.append(r + " ||| " + " ".join(["%s-%s" % (x[0], x[1]) for x in span]))
     return ret
 
-def compose_rule_string(nt, parent, child):
+def compose_rule_string(nt, parent, child, parent_span, child_span):
     parent_col = parent.split(' ||| ')
     child_col = child.split(' ||| ')
     ret = []
-    for (p_col, c_col) in zip(parent_col,child_col):
+    for num, (p_col, c_col) in enumerate(zip(parent_col,child_col)):
+        if num == 2: break
         p_col_token = p_col.split()
         c_col_token = c_col.split()
-        for i, p_token in enumerate(p_col_token):
+        for i, p_token in enumerate(p_col_token): # we need to replace those NT
             if p_token == '@': break 
-            if p_token[0] != '"' and p_token[-1] != '"' and p_token[0] == 'x' and p_token[1] == str(nt):
-                p_col_token[i] = replace_x_with_y(' '.join(c_col_token[:-2]),nt)
-                break
+            if p_token[0] != '"' and p_token[-1] != '"': # Non Terminal
+                now_nt, symbol = p_token.split(":")
+                now_nt = int(now_nt[1:])
+                if now_nt == nt:
+                    p_col_token[i] = replace_x_with_y(' '.join(c_col_token[:-2]),nt)
+                    if num == 0: # Only replace span when we check the source
+                        parent_span.pop(i)
+                        for child_span_elem in reversed(child_span):
+                            parent_span.insert(i,child_span_elem)
+                    break 
         ret.append(' '.join(p_col_token))
     return ' ||| '.join(map(lambda x: rename_non_terminal(x),ret))
 
@@ -241,19 +266,20 @@ def rename_non_terminal(c,xFixed = True):
                 nt_map[x] = x
                 fixed.add(int(x[1:]))
 
-    for part in parts:
+    for num_part, part in enumerate(parts):
         tokens = part.split()
-        for i, token in enumerate(tokens):
-            if token == '@': break
-            if token[0] != '"' and token[-1] != '"':
-                t, right = token.split(":")
-                if t not in nt_map:
-                    while ctr in fixed:
+        if num_part < 2:
+            for i, token in enumerate(tokens):
+                if token == '@': break
+                if token[0] != '"' and token[-1] != '"':
+                    t, right = token.split(":")
+                    if t not in nt_map:
+                        while ctr in fixed:
+                            ctr += 1
+                        nt_new = 'x' + str(ctr)
+                        nt_map[t] = nt_new
                         ctr += 1
-                    nt_new = 'x' + str(ctr)
-                    nt_map[t] = nt_new
-                    ctr += 1
-                tokens[i] = nt_map[t] + ":" + right
+                    tokens[i] = nt_map[t] + ":" + right
         ret.append(' '.join(tokens))
     return ' ||| '.join(ret)
 
@@ -301,10 +327,11 @@ def lexical_acq(node,sent,rules,merge_unary=False):
         lexical_acq(child,sent,rules,merge_unary)
     if node.frontier:
         node.frontier_child = {}
-        sentence, (logic,_) = extract_node(node,node,sent,{},merge_unary,{},[False] * len(sent))
-        #logic = merge_logic_output(logic)
+        sentence_list, (logic,_), spans = extract_node(node,node,sent,{},merge_unary,{},[False] * len(sent))
+        sentence = " ".join([str(x[2]) for x in sorted(sentence_list,key=lambda x:x[0])])
         res = sentence + " @ " +  normalize_head(node.head)+append_var_info(node.bound) + " ||| " +  logic +  " @ " + normalize_head(node.head)+append_var_info(node.bound)
         node.result = res
+        node.span = spans
         rules.append(res)
     return rules
 
@@ -349,7 +376,7 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
             root.frontier_child[number] = s[NODE]
         else: # depth recursion to this node, extraction continued rooted at this node
             s[NODE].not_frontier()
-            sent_child, logic_child = extract_node(root,s[NODE],sent,var_map,merge_unary,bound_map,extracted,start=False)
+            sent_child, logic_child, _ = extract_node(root,s[NODE],sent,var_map,merge_unary,bound_map,extracted,start=False)
             for s in sent_child: sent_list.append(s)
             logic_list.append(logic_child)
    
@@ -378,8 +405,9 @@ def extract_node(root,node,sent,var_map,merge_unary,bound_map,extracted,start=Tr
         logic += ' ")" '
     #logic += '"'
     
-    return (sent_list if not start else (' '.join([x[2] for x in sorted(sent_list,key=lambda x:x[0])])),\
-            (logic,bound_remapping(node.bound,bound_map)))
+    return sent_list,\
+            (logic,bound_remapping(node.bound,bound_map)), \
+            [(x[0],x[1]) for x in sorted(sent_list,key=lambda x:x[0])]
 
 def normalize_head(head):
     if head == CONJUNCTION or head == NEGATION:
@@ -629,6 +657,7 @@ def parse_argument():
     parser.add_argument('--verbose',action="store_true",help="Show some other outputs to help human reading.")
     parser.add_argument('--merge_unary',action="store_true",help="Merge the unary transition node. Avoiding Rule like FORM->FORM")
     parser.add_argument('--max_size', type=int, default=4,help="Compose max size")
+    parser.add_argument('--three_sync', type=str, help="Stopword list to make 3-sync grammar")
     return parser.parse_args()
 
 if __name__ == "__main__":

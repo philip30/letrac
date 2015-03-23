@@ -5,8 +5,8 @@ import hashlib
 import time
 import random
 import mysql.connector as mysql
-from multiprocessing import Lock
 
+TRIES = 100
 DB_NAME = "GEOQUERY_CACHE"
 TABLES = {}
 TABLES['query'] = (
@@ -16,7 +16,6 @@ TABLES['query'] = (
         "   `result` text NOT NULL,"
         "   PRIMARY KEY (`hash`)) ENGINE=InnoDB"
 )
-lock = Lock()
 
 def hash_q(query):
     return str(hashlib.sha224(b"%s" % (query)).hexdigest())
@@ -36,7 +35,6 @@ class MySql:
         self.username = config["user"]
         self.password = config["password"]
         self.host = config["host"]
-        self.counter = 0
 
         # Initiate database
         try:
@@ -56,29 +54,17 @@ class MySql:
 
     def connect(self):
         db = None
-        try:
-            db = mysql.connect(user=self.username, password=self.password, host=self.host, database=DB_NAME)
-        except:
-            return None
+        i = 0
+        while db is None and i < TRIES:
+            try:
+                db = mysql.connect(user=self.username, password=self.password, host=self.host, database=DB_NAME)
+            except:
+                pass
+            i += 1
         return db
     
-#    def exists(self,query):
-#        db = self.connect()
-#        cursor = db.cursor()
-#    
-#        try:
-#            select_query = ("SELECT q.query, q.result FROM `query` AS q WHERE q.hash = \"%s\"" % (hash_q(query)))
-#            cursor.execute(select_query)
-#            
-#            result = [data for data in cursor]
-#            return len(result) != 0
-#        finally:
-#            db.close()
-#            cursor.close()
-       
     def write(self,query,result):
         db = self.connect()
-        
         if db is None:
             return
         
@@ -96,21 +82,11 @@ class MySql:
             cursor.close()
     
     def read(self,query):
-        #time.sleep(random.uniform(0.01,0.05))
-        
-#        lock.aqcquire()
-#        self.counter += 1
-#        if (self.counter % 250 == 0):
-#            time.sleep(1)
-#        lock.release()
-
         db = self.connect()
-
         if db is None:
             return None
 
         cursor = db.cursor()
-            
         try:
             select_query = ("SELECT q.result FROM `query` AS q WHERE q.hash = \"%s\"" % hash_q(query))
             cursor.execute(select_query)

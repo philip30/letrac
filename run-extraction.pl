@@ -11,7 +11,7 @@ binmode STDOUT, ":utf8";
 binmode STDERR, ":utf8";
 
 my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP);
-my ($MAX_SIZE,$ALIGN,$MANUAL);
+my ($MAX_SIZE,$ALIGN,$MANUAL,$THREE_SYNC);
 my $MAX_SIZE = "4";
 
 GetOptions(
@@ -28,6 +28,7 @@ GetOptions(
     "force!" => \$FORCE,
     "align=s" => \$ALIGN,
     "manual=s" => \$MANUAL,
+    "three-sync=s" => \$THREE_SYNC,
 );
 
 if (not (defined($LETRAC_DIR) && defined($PIALIGN_DIR) && defined($WORKING_DIR) && defined($INPUT))) {
@@ -73,7 +74,8 @@ exit(0) if $LAST_STEP eq "align";
 
 safesystem("mkdir $WORKING_DIR/model") or die;
 # lexical-acquisition
-my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --input $WORKING_DIR/data/$file_name.preprocess --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE";
+my $three_sync = $THREE_SYNC ? "--three_sync $THREE_SYNC" : "";
+my $lex_command = "$LETRAC_DIR/script/extract/lexical-acq.py --input $WORKING_DIR/data/$file_name.preprocess --sent $WORKING_DIR/data/$file_name.sent --fol $WORKING_DIR/data/$file_name.fol --align $ALIGN --max_size $MAX_SIZE $three_sync";
 $lex_command .= " --verbose" if $VERBOSE;
 $lex_command .= " --merge_unary" if $MERGE_UNARY;
 $lex_command .= " > $WORKING_DIR/model/lexical-grammar.txt";

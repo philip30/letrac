@@ -26,10 +26,11 @@ def paralength(paraphrase):
             break
         if len(word) > 1 and word[0] == '"' and word[-1] == '"':
             count += 1
-    return count
+    return count if args.trg_factors == 2 else 0
 
 for i,line in enumerate(sys.stdin):
-    (id, sent, log) = line.strip().split(" ||| ")
+    line_col = line.strip().split(" ||| ")
+    (id, sent, log) = line_col[0], line_col[1], line_col[2]
     count[sent,log] += 1
     context[sent] += 1
     context[log] += 1

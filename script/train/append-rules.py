@@ -9,12 +9,14 @@ import argparse
 parser = argparse.ArgumentParser(description="Append KB")
 parser.add_argument('-i', dest='rules', type=str,required=True)
 parser.add_argument('--trg_factors', type=int, default=1)
+parser.add_argument('-duplicate_src', action="store_true")
 args = parser.parse_args()
 
 def print_rule(line,trg_factor):
+    print line
     src, trg, feat = line.split(" ||| ")
     if trg_factor == 2:
-        trgs = " |COL| ".join([src, trg])
+        trgs = " |COL| ".join([src if args.duplicate_src else trg, trg])
     else:
         trgs = trg
     print "%s ||| %s ||| %s" % (src,trgs,feat)

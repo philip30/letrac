@@ -38,6 +38,7 @@ class SearchNode:
         self.ekeyword = []
         self.frontier_child = {}
         self.bound_remap = []
+        self.span = []
 
     def not_frontier(self):
         self.frontier = False
@@ -61,6 +62,7 @@ class SearchNode:
         k += "\tvoriginfo: "+str(self.voriginfo) + "\n"
         k += "\tfrontier_child: "+str([x.id for x in self.frontier_child.values()]) + "\n"
         k += "\tresult: "+str(self.result) +"\n"
+        k += "\tspan: "+ str(self.span) + "\n"
         return k
         
 def extract(line,position=0,parent=""):

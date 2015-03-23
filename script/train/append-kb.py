@@ -49,30 +49,36 @@ def print_rule(head, src, trg, feature):
 ### Functions to process the line
 def state_kb(line):
     state_name = line[0][1:-1]
-    print_rule("STATE",state_name,state_name,"state_kb")
+    print_rule("STATE",state_name,state_name,"kb")
 
 def city_kb(line):
     global all_map
     state_name, state_abv, city_name = line[0][1:-1], line[1][1:-1], line[2][1:-1]
     if (("city",city_name)) not in all_map:
         all_map.add(("city",city_name))
-        print_rule("CITY",city_name,city_name,"city_kb")
-    print_rule("ABR",state_name,state_abv,"abr_kb")
+        print_rule("CITY",city_name,city_name,"kb")
+    print_rule("ABR",state_name,state_abv,"kb")
 
 def river_kb(line):
     river_name = line[0][1:-1]
-    print_rule("RIVER",river_name,river_name,"river_kb")
+    print_rule("RIVER",river_name,river_name,"kb")
 
 def mountain_kb(line):
     mountain_name = "mount " + line[2][1:-1]
-    print_rule("PLACE",mountain_name,mountain_name,"mountain_kb")
+    print_rule("PLACE",mountain_name,mountain_name,"kb")
 
 def lake_kb(line):
     lake_name = body[0][1:-1]
-    print_rule("PLACE",lake_name,lake_name,"lake_kb")
+    print_rule("PLACE",lake_name,lake_name,"kb")
+
+def highlow(line):
+    high_name = body[2][1:-1]
+    low_name = body[4][1:-1]
+    print_rule("PLACE", high_name,high_name, "kb")
+    print_rule("PLACE", low_name, low_name, "kb")
 
 # Functions just to map predicate to function only for beautification
-functions = {'state':state_kb, 'city':city_kb, 'river':river_kb,'mountain':mountain_kb,'lake':lake_kb}
+functions = {'state':state_kb, 'city':city_kb, 'river':river_kb,'mountain':mountain_kb,'lake':lake_kb, 'highlow':highlow}
 
 # Printing the previous rule
 for line in sys.stdin:
