@@ -7,6 +7,7 @@ import argparse
 import threading
 import signal
 import math
+import os
 from script.util.qdatabase import MySql
 from script.util.breduct import breduct as beta_reduction
 from script.util.typecheck import typecheck as type_check
@@ -22,9 +23,7 @@ parser.add_argument('-input', type=str, required=True)
 parser.add_argument('-trg_factors', type=int, required=True)
 parser.add_argument('-geoquery', type=str, required=True)
 parser.add_argument('-ref', type=str, required=True)
-#parser.add_argument('-original_ref', type=str, required=True)
 parser.add_argument('-database_config', type=str)
-#parser.add_argument('-time', type=str, required=True)
 parser.add_argument('-timeout', type=int, default=1)
 parser.add_argument('-driver_function', type=str, default="execute_query")
 parser.add_argument('-no_typecheck', action="store_true")
@@ -37,7 +36,7 @@ EMPTY_RESULT = "Answer = [EmptyResult]"
 TIMEOUT_RESULT = "Answer = [Timeout]"
 BREDUCT_ERR = "Error"
 stderr_lock = Lock()
-TIMEOUT = args.timeout
+TIMEOUT = 30
 
 # Decomposing File Input
 cols = args.input.split("/")
@@ -53,6 +52,10 @@ breduct_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fna
 typecheck_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".typecheck"
 empty_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".empty" 
 result_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".result"
+sync_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".sync"
+query_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".query"
+result_geo_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname +".georesult"
+variable_path = parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".numvarcheck"
 
 # log files
 typecheck_log = open(parent_dir + ("/" if len(parent_dir) != 0 else "") + stripped_fname + ".typecheck.log", 'w')
@@ -109,6 +112,23 @@ def check_empty(i, line, args):
     n, line = line[0], line[1]
     return str(i) if len(read_list(line)) != 0 else ""
 
+def calc_var(line):
+    return len(set([x for x in line if x.isupper()]))
+
+def check_num_var(i, line, args):
+    global original_ref
+    line = line.strip().split("\t")
+    n, line = line[0], line[1].split(" |COL| ")[0]
+    
+    original_len = calc_var(original_ref[int(n)])
+    line_len = calc_var(line)
+
+    if original_len <= 5:
+        return str(i) if line_len <= 5 else ""
+    else:
+        return ""
+        #return str(i) if line_len <= original_len else ""
+
 # Synchronous printing for multithreading
 def sync_print(line):
     global stderr_lock
@@ -141,7 +161,6 @@ class GeoThread (threading.Thread):
                 outval = BAD_QUERY
         else:
             outval = BAD_QUERY
-
         self.result = (self.process.returncode, outval, errval) 
     def terminate(self):
         if self.process is not None:
@@ -151,10 +170,9 @@ class GeoThread (threading.Thread):
 def geoquery(i,line, args):
     n, line = line.strip().split("\t")
     line = line.split(" |COL| ")[0]
-    cmd = "%s(%s,Answer)." % (args.driver_function, line)
+    cmd = "%s(%s,Answer)." % (args.driver_function,line)
     result = None
     result_ok = True
-# FOR THE SAKE OF DETECTING UNSTABLE RESULT THESE LINES ARE COMMENTED
     try:
         result = database.read(line)
         if result is None:
@@ -169,7 +187,7 @@ def geoquery(i,line, args):
         
         thread = GeoThread(cmd,program,s,location)
         thread.start()
-        thread.join(set_timeout(n,TIMEOUT))
+        thread.join(TIMEOUT)
 
         if thread.is_alive():
             thread.terminate()
@@ -275,6 +293,12 @@ def purge_line(ref_file, inp_files):
             for line in buffer:
                 print >> inp_write, line
 
+def execute_geoquery(geoquery):
+    os.system("script/geoquery/get-query.py < %s > %s" % (breduct_path, query_path))
+    os.system("%s --nodebug < %s > %s 2> %s" % (geoquery, query_path, result_geo_path, sync_path))
+    os.system("sed -i \"s/?/\\n/g\" %s" % (sync_path))
+    os.system("script/geoquery/sync-output.py --inp %s --sync %s --n %s > %s" % (result_geo_path, sync_path, breduct_path, result_path))
+
 #### EXECUTION BEGINS HERE ####
 # Reading Gold Standard
 with open(args.ref,'r') as gf:
@@ -294,6 +318,7 @@ if not args.no_typecheck:
 else:
     print >> typecheck_log, "No Typechecking is performed!"    
 typecheck_log.close()
+
 
 # Query the database
 execpar(args, geoquery, open(breduct_path, 'r'), open(result_path,'w'), sys.stderr)

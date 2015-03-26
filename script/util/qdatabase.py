@@ -6,7 +6,7 @@ import time
 import random
 import mysql.connector as mysql
 
-TRIES = 100
+TRIES = 10
 DB_NAME = "GEOQUERY_CACHE"
 TABLES = {}
 TABLES['query'] = (
@@ -55,12 +55,10 @@ class MySql:
     def connect(self):
         db = None
         i = 0
-        while db is None and i < TRIES:
-            try:
-                db = mysql.connect(user=self.username, password=self.password, host=self.host, database=DB_NAME)
-            except:
-                pass
-            i += 1
+        try:
+            db = mysql.connect(user=self.username, password=self.password, host=self.host, database=DB_NAME)
+        except:
+            pass
         return db
     
     def write(self,query,result):

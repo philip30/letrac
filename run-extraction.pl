@@ -13,6 +13,7 @@ binmode STDERR, ":utf8";
 my ($PIALIGN_DIR, $WORKING_DIR, $INPUT, $MERGE_UNARY, $LETRAC_DIR, $FORCE, $VERBOSE, $LAST_STEP);
 my ($MAX_SIZE,$ALIGN,$MANUAL,$THREE_SYNC);
 my $MAX_SIZE = "4";
+my $THREADS = "24";
 
 GetOptions(
     # Necessary
@@ -29,6 +30,7 @@ GetOptions(
     "align=s" => \$ALIGN,
     "manual=s" => \$MANUAL,
     "three-sync=s" => \$THREE_SYNC,
+    "threads=s" => \$THREADS,
 );
 
 if (not (defined($LETRAC_DIR) && defined($PIALIGN_DIR) && defined($WORKING_DIR) && defined($INPUT))) {

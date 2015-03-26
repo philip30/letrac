@@ -13,7 +13,6 @@ parser.add_argument('-duplicate_src', action="store_true")
 args = parser.parse_args()
 
 def print_rule(line,trg_factor):
-    print line
     src, trg, feat = line.split(" ||| ")
     if trg_factor == 2:
         trgs = " |COL| ".join([src if args.duplicate_src else trg, trg])
